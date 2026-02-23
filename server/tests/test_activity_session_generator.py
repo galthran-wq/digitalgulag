@@ -241,6 +241,42 @@ class TestActivitySessionGenerator:
         assert firefox.url == "https://example.com"
 
 
+    async def test_rapid_app_switching_merges_by_app(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """Rapid Chrome↔Cursor switching should produce 2 merged sessions, not 8."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        base = datetime(2026, 2, 23, 14, 0, tzinfo=timezone.utc)
+        events = [
+            _event("active_window", base, app_name="Chrome", window_title="YouTube"),
+            _event("active_window", base + timedelta(seconds=5), app_name="Cursor", window_title="main.py"),
+            _event("active_window", base + timedelta(seconds=10), app_name="Chrome", window_title="GitHub"),
+            _event("active_window", base + timedelta(seconds=40), app_name="Cursor", window_title="utils.py"),
+            _event("active_window", base + timedelta(seconds=90), app_name="Chrome", window_title="Docs"),
+            _event("active_window", base + timedelta(seconds=120), app_name="Cursor", window_title="test.py"),
+            _event("active_window", base + timedelta(minutes=3), app_name="Chrome", window_title="PR"),
+            _event("active_window", base + timedelta(minutes=10), app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        count = await generator.generate_for_date(test_user.id, date(2026, 2, 23))
+
+        sessions = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 23), date(2026, 2, 23), limit=100, offset=0,
+        )
+        app_names = [s.app_name for s in sessions]
+        # Chrome and Cursor each merge into one session, plus Firefox at the end
+        assert app_names == ["Chrome", "Cursor", "Firefox"]
+        # Chrome: from base to base+10min (all Chrome within 2min gaps merge)
+        chrome = sessions[0]
+        assert chrome.start_time == base
+        assert chrome.end_time == base + timedelta(minutes=10)
+        assert set(chrome.window_titles) == {"YouTube", "GitHub", "Docs", "PR"}
+
+
 class TestIncrementalGeneration:
     async def test_first_batch_creates_sessions(
         self, db_session: AsyncSession, test_user: UserModel,

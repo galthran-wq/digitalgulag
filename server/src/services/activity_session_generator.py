@@ -8,6 +8,7 @@ from src.repositories.activity_sessions import ActivitySessionRepositoryInterfac
 logger = logging.getLogger(__name__)
 
 MIN_SESSION_DURATION_SECONDS = 5
+MERGE_GAP_SECONDS = 120  # merge same-app sessions separated by ≤2 min
 
 
 class ActivitySessionGenerator:
@@ -43,7 +44,7 @@ class ActivitySessionGenerator:
 
         cap_time = datetime.now(timezone.utc)
         raw_sessions = self._build_sessions(events, cap_time)
-        merged = self._merge_consecutive(raw_sessions)
+        merged = self._merge_by_app(raw_sessions)
         filtered = [s for s in merged if self._duration_seconds(s) >= MIN_SESSION_DURATION_SECONDS]
         final = self._split_cross_midnight(filtered)
 
@@ -65,7 +66,7 @@ class ActivitySessionGenerator:
             return 0
 
         raw_sessions = self._build_sessions(events, day_end)
-        merged = self._merge_consecutive(raw_sessions)
+        merged = self._merge_by_app(raw_sessions)
         filtered = [s for s in merged if self._duration_seconds(s) >= MIN_SESSION_DURATION_SECONDS]
         final = self._split_cross_midnight(filtered)
 
@@ -142,26 +143,40 @@ class ActivitySessionGenerator:
 
         return sessions
 
-    def _merge_consecutive(self, sessions: list[dict]) -> list[dict]:
+    def _merge_by_app(self, sessions: list[dict]) -> list[dict]:
+        """Merge same-app sessions that are within MERGE_GAP_SECONDS of each other,
+        even when separated by other-app sessions. This collapses rapid
+        app-switching (e.g. Chrome↔Cursor every 5s) into larger blocks."""
         if not sessions:
             return []
 
-        merged = [sessions[0]]
-        for s in sessions[1:]:
-            prev = merged[-1]
-            if prev["app_name"] == s["app_name"]:
-                prev["end_time"] = s["end_time"]
-                # Merge window titles
-                existing = set(prev["window_titles"])
-                for t in s["window_titles"]:
-                    if t not in existing:
-                        prev["window_titles"].append(t)
-                        existing.add(t)
-                if s["url"] and not prev["url"]:
-                    prev["url"] = s["url"]
-            else:
-                merged.append(s)
+        from collections import defaultdict
 
+        groups: dict[str, list[dict]] = defaultdict(list)
+        for s in sessions:
+            groups[s["app_name"]].append(s)
+
+        merged: list[dict] = []
+        for app_sessions in groups.values():
+            # Sessions are already in chronological order from _build_sessions
+            current = app_sessions[0]
+            for s in app_sessions[1:]:
+                gap = (s["start_time"] - current["end_time"]).total_seconds()
+                if gap <= MERGE_GAP_SECONDS:
+                    current["end_time"] = s["end_time"]
+                    existing = set(current["window_titles"])
+                    for t in s["window_titles"]:
+                        if t not in existing:
+                            current["window_titles"].append(t)
+                            existing.add(t)
+                    if s["url"] and not current["url"]:
+                        current["url"] = s["url"]
+                else:
+                    merged.append(current)
+                    current = s
+            merged.append(current)
+
+        merged.sort(key=lambda s: s["start_time"])
         return merged
 
     def _split_cross_midnight(self, sessions: list[dict]) -> list[dict]:
