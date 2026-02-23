@@ -5,7 +5,7 @@ import { ScheduleXCalendar } from '@schedule-x/vue'
 import { createCalendar, viewDay, viewWeek } from '@schedule-x/calendar'
 import { createDragAndDropPlugin } from '@schedule-x/drag-and-drop'
 import { createResizePlugin } from '@schedule-x/resize'
-import { format, formatISO, parseISO } from 'date-fns'
+import { formatISO } from 'date-fns'
 import { useTimelineStore } from '@/stores/timeline'
 import { ApiError } from '@/api/client'
 import TimelineEntryForm from '@/components/TimelineEntryForm.vue'
@@ -23,19 +23,33 @@ const clickedTime = ref<string | undefined>(undefined)
 const dragAndDrop = createDragAndDropPlugin()
 const eventResize = createResizePlugin()
 
+const tz = Temporal.Now.timeZoneId()
+
+function isoToZoned(iso: string): Temporal.ZonedDateTime {
+  const d = new Date(iso)
+  return Temporal.ZonedDateTime.from({
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    hour: d.getHours(),
+    minute: d.getMinutes(),
+    timeZone: tz,
+  })
+}
+
 function entryToEvent(e: TimelineEntry) {
   return {
     id: e.id,
     title: e.category ? `${e.label} (${e.category})` : e.label,
-    start: format(parseISO(e.start_time), 'yyyy-MM-dd HH:mm'),
-    end: format(parseISO(e.end_time), 'yyyy-MM-dd HH:mm'),
+    start: isoToZoned(e.start_time),
+    end: isoToZoned(e.end_time),
   }
 }
 
 const calendar = createCalendar({
   views: [viewDay, viewWeek],
   defaultView: viewDay.name,
-  selectedDate: timelineStore.selectedDate,
+  selectedDate: Temporal.PlainDate.from(timelineStore.selectedDate),
   events: [],
   plugins: [dragAndDrop, eventResize],
   callbacks: {
@@ -49,20 +63,20 @@ const calendar = createCalendar({
     },
     onClickDateTime(dateTime) {
       editingEntry.value = null
-      clickedTime.value = dateTime
+      clickedTime.value = new Date(dateTime.epochMilliseconds).toISOString()
       showForm.value = true
     },
     onSelectedDateUpdate(date) {
-      timelineStore.selectedDate = date
+      timelineStore.selectedDate = date.toString()
     },
     async onEventUpdate(updatedEvent) {
       try {
-        const startStr = String(updatedEvent.start).replace(' ', 'T')
-        const endStr = String(updatedEvent.end).replace(' ', 'T')
-        const entryDate = startStr.substring(0, 10)
+        const start = updatedEvent.start as Temporal.ZonedDateTime
+        const end = updatedEvent.end as Temporal.ZonedDateTime
+        const entryDate = start.toPlainDate().toString()
         await timelineStore.updateEntry(String(updatedEvent.id), {
-          start_time: formatISO(new Date(startStr)),
-          end_time: formatISO(new Date(endStr)),
+          start_time: formatISO(new Date(start.epochMilliseconds)),
+          end_time: formatISO(new Date(end.epochMilliseconds)),
           date: entryDate,
         })
       } catch (e) {
@@ -75,17 +89,10 @@ const calendar = createCalendar({
 
 function syncEvents() {
   const events = timelineStore.entries.map(entryToEvent)
-  // Clear and re-set all events
   try {
-    const existing = calendar.events.getAll()
-    for (const ev of existing) {
-      calendar.events.remove(String(ev.id))
-    }
+    calendar.events.set(events)
   } catch {
     // events may not be initialized yet
-  }
-  for (const ev of events) {
-    calendar.events.add(ev)
   }
 }
 
