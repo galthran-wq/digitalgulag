@@ -59,7 +59,13 @@ make dev-make-migrations "name"  # generate alembic migration
 # or inside server/: alembic revision --autogenerate -m "name"
 # apply: alembic upgrade head
 
-# Testing (server)
+# Testing (server) — via Docker (preferred)
+make dev-test-db                 # create test DB (once)
+make dev-test-migrate            # apply migrations to test DB
+make dev-test                    # run all tests
+make dev-test tests/test_foo.py  # run specific test file
+
+# Testing (server) — local
 cd server
 uv sync --extra dev              # install deps
 uv run alembic upgrade head      # apply migrations
