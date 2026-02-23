@@ -35,10 +35,10 @@ dev-test-db:
 	docker compose -p $(COMPOSE_PROJECT_NAME_DEV) exec postgres createdb -U $(POSTGRES_USER) $(POSTGRES_DB)_test || true
 
 dev-test-migrate:
-	docker compose -p $(COMPOSE_PROJECT_NAME_DEV) exec -e POSTGRES_DB=$(POSTGRES_DB)_test -e PYTHONPATH=/app server bash -lc "alembic upgrade head"
+	docker compose -p $(COMPOSE_PROJECT_NAME_DEV) exec -e POSTGRES_DB=$(POSTGRES_DB)_test -e PYTHONPATH=/app server bash -lc "uv run alembic upgrade head"
 
 dev-test:
-	docker compose -p $(COMPOSE_PROJECT_NAME_DEV) exec -e POSTGRES_DB=$(POSTGRES_DB)_test -e PYTHONPATH=/app server bash -lc "pytest tests/ -v $(ARGS)"
+	docker compose -p $(COMPOSE_PROJECT_NAME_DEV) exec -e POSTGRES_DB=$(POSTGRES_DB)_test -e PYTHONPATH=/app server bash -lc "uv run pytest tests/ -v $(ARGS)"
 
 dev-superuser:
 	@if [ -z "$(ARGS)" ]; then \
