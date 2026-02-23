@@ -8,7 +8,7 @@ from src.repositories.activity_sessions import ActivitySessionRepositoryInterfac
 logger = logging.getLogger(__name__)
 
 MIN_SESSION_DURATION_SECONDS = 5
-MERGE_GAP_SECONDS = 120  # merge same-app sessions separated by ≤2 min
+MERGE_GAP_SECONDS = 300  # merge same-app sessions separated by ≤5 min
 
 
 class ActivitySessionGenerator:
