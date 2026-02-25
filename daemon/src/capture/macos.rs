@@ -21,8 +21,6 @@ impl MacOSSource {
         Self
     }
 
-    /// Get the frontmost application's display name and PID.
-    /// Does NOT require Screen Recording permission.
     fn get_frontmost_app(&self) -> Option<(String, i32)> {
         let workspace = NSWorkspace::sharedWorkspace();
         let app = workspace.frontmostApplication()?;
@@ -36,9 +34,6 @@ impl MacOSSource {
         Some((name.to_string(), pid))
     }
 
-    /// Get the window title for a given PID using CGWindowListCopyWindowInfo.
-    /// Requires Screen Recording permission for window titles.
-    /// Returns None if permission not granted or no matching window found.
     fn get_window_title_for_pid(&self, target_pid: i32) -> Option<String> {
         let options =
             CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements;
@@ -48,29 +43,28 @@ impl MacOSSource {
         let mut found_window = false;
 
         for i in 0..count {
-            // SAFETY: i is within 0..count. The array contains CFDictionary entries
-            // per CGWindowListCopyWindowInfo documentation.
             let dict_ptr = unsafe { window_list.value_at_index(i as isize) };
             if dict_ptr.is_null() {
                 continue;
             }
             let dict = unsafe { &*(dict_ptr as *const CFDictionary) };
 
-            // Check if this window belongs to our target PID
-            let pid = cf_dict_get_i32(dict, &kCGWindowOwnerPID);
+            let (pid_key, layer_key, name_key) = unsafe {
+                (&*kCGWindowOwnerPID, &*kCGWindowLayer, &*kCGWindowName)
+            };
+
+            let pid = cf_dict_get_i32(dict, pid_key);
             if pid != Some(target_pid) {
                 continue;
             }
 
-            // Filter to normal windows (layer 0) — skip menubar, dock, etc.
-            if cf_dict_get_i32(dict, &kCGWindowLayer).unwrap_or(-1) != 0 {
+            if cf_dict_get_i32(dict, layer_key).unwrap_or(-1) != 0 {
                 continue;
             }
 
             found_window = true;
 
-            // Extract window title — absent when Screen Recording permission not granted
-            if let Some(title) = cf_dict_get_string(dict, &kCGWindowName) {
+            if let Some(title) = cf_dict_get_string(dict, name_key) {
                 if !title.is_empty() {
                     return Some(title);
                 }
@@ -88,7 +82,6 @@ impl MacOSSource {
     }
 }
 
-/// Extract an i32 value from a CFDictionary by CFString key.
 fn cf_dict_get_i32(dict: &CFDictionary, key: &CFString) -> Option<i32> {
     let ptr = unsafe { dict.value(key as *const CFString as *const c_void) };
     if ptr.is_null() {
@@ -97,7 +90,6 @@ fn cf_dict_get_i32(dict: &CFDictionary, key: &CFString) -> Option<i32> {
     unsafe { &*(ptr as *const CFNumber) }.as_i32()
 }
 
-/// Extract a String value from a CFDictionary by CFString key.
 fn cf_dict_get_string(dict: &CFDictionary, key: &CFString) -> Option<String> {
     let ptr = unsafe { dict.value(key as *const CFString as *const c_void) };
     if ptr.is_null() {
