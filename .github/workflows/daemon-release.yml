@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,34 +39,121 @@ jobs:
       - name: Build .deb package
         run: cargo deb --no-build
 
-      - name: Upload .deb artifact (PRs and branches)
+      - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
           name: timeoracle-daemon-deb
           path: daemon/target/debian/*.deb
           retention-days: 14
 
-      - name: Upload binary artifact (PRs and branches)
+      - name: Upload Linux binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: timeoracle-daemon-binary
+          name: timeoracle-daemon-linux-binary
           path: daemon/target/release/timeoracle-daemon
           retention-days: 14
 
-      - name: Prepare release assets
+      - name: Prepare release tarball
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           cd target/release
           tar czf timeoracle-daemon-linux-x86_64.tar.gz timeoracle-daemon
           sha256sum timeoracle-daemon-linux-x86_64.tar.gz > timeoracle-daemon-linux-x86_64.tar.gz.sha256
 
-      - name: Create GitHub Release
+      - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-assets
+          path: |
+            daemon/target/debian/*.deb
+            daemon/target/release/timeoracle-daemon-linux-x86_64.tar.gz
+            daemon/target/release/timeoracle-daemon-linux-x86_64.tar.gz.sha256
+
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: daemon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: daemon
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Create .dmg
+        run: |
+          mkdir -p dmg-contents
+          cp target/release/timeoracle-daemon dmg-contents/
+
+          cat > dmg-contents/README.txt << 'EOF'
+          TimeOracle Daemon
+          =================
+
+          Install:
+            1. Copy timeoracle-daemon to /usr/local/bin/ (or a directory in your PATH)
+            2. Run: timeoracle-daemon login --server-url <your-server>
+            3. Run: timeoracle-daemon install
+            4. Run: launchctl load ~/Library/LaunchAgents/com.timeoracle.daemon.plist
+
+          Or run directly:
+            timeoracle-daemon run --headless
+
+          Note: Grant Screen Recording permission in
+            System Settings > Privacy & Security > Screen Recording
+          for window title capture.
+          EOF
+
+          hdiutil create \
+            -volname "TimeOracle Daemon" \
+            -srcfolder dmg-contents \
+            -ov \
+            -format UDZO \
+            timeoracle-daemon-macos-arm64.dmg
+
+          shasum -a 256 timeoracle-daemon-macos-arm64.dmg > timeoracle-daemon-macos-arm64.dmg.sha256
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timeoracle-daemon-dmg
+          path: |
+            daemon/timeoracle-daemon-macos-arm64.dmg
+            daemon/timeoracle-daemon-macos-arm64.dmg.sha256
+          retention-days: 14
+
+      - name: Upload macOS binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timeoracle-daemon-macos-binary
+          path: daemon/target/release/timeoracle-daemon
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-assets
+          path: release-assets/
+
+      - name: Download macOS release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: timeoracle-daemon-dmg
+          path: release-assets/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Daemon ${{ github.ref_name }}
           generate_release_notes: true
-          files: |
-            daemon/target/debian/*.deb
-            daemon/target/release/timeoracle-daemon-linux-x86_64.tar.gz
-            daemon/target/release/timeoracle-daemon-linux-x86_64.tar.gz.sha256
+          files: release-assets/**
