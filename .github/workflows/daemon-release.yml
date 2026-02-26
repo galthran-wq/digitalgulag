@@ -86,19 +86,23 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
+      - name: Assemble .app bundle
+        run: |
+          mkdir -p TimeOracle.app/Contents/MacOS
+          cp target/release/timeoracle-daemon TimeOracle.app/Contents/MacOS/
+          cp pkg/macos/Info.plist TimeOracle.app/Contents/
+
       - name: Create .pkg installer
         run: |
-          mkdir -p pkg-root/usr/local/bin
-          cp target/release/timeoracle-daemon pkg-root/usr/local/bin/
-
           VERSION="${GITHUB_REF_NAME#daemon-v}"
           VERSION="${VERSION:-0.0.0}"
 
           pkgbuild \
-            --root pkg-root \
+            --component TimeOracle.app \
+            --install-location /Applications \
+            --scripts pkg/macos/scripts \
             --identifier com.timeoracle.daemon \
             --version "$VERSION" \
-            --install-location / \
             timeoracle-daemon-macos-arm64.pkg
 
           shasum -a 256 timeoracle-daemon-macos-arm64.pkg > timeoracle-daemon-macos-arm64.pkg.sha256

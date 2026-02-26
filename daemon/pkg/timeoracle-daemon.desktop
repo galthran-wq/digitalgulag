@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=TimeOracle
+Comment=Activity tracking daemon
+Exec=timeoracle-daemon run
+Icon=timeoracle-daemon
+Terminal=false
+Categories=Utility;
+StartupNotify=false

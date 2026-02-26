@@ -1,0 +1,2 @@
+#!/bin/bash
+ln -sf /Applications/TimeOracle.app/Contents/MacOS/timeoracle-daemon /usr/local/bin/timeoracle-daemon
