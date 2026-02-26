@@ -192,7 +192,8 @@ mod macos_login {
     use objc2::MainThreadOnly;
     use objc2_app_kit::{
         NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSButton, NSColor,
-        NSEventMask, NSFont, NSSecureTextField, NSTextField, NSWindow, NSWindowStyleMask,
+        NSEvent, NSEventMask, NSFont, NSSecureTextField, NSTextField, NSWindow,
+        NSWindowStyleMask,
     };
     use objc2_foundation::{
         MainThreadMarker, NSDate, NSDefaultRunLoopMode, NSPoint, NSRect, NSSize, NSString,
@@ -255,12 +256,11 @@ mod macos_login {
         let email_field = make_field("", 125.0);
         let pass_label = make_label("Password", 85.0);
         let pass_field = unsafe {
-            NSSecureTextField::textFieldWithString(&NSString::from_str(""), mtm)
+            NSSecureTextField::initWithFrame(
+                NSSecureTextField::alloc(mtm),
+                NSRect::new(NSPoint::new(120.0, 85.0), NSSize::new(240.0, 22.0)),
+            )
         };
-        pass_field.setFrame(NSRect::new(
-            NSPoint::new(120.0, 85.0),
-            NSSize::new(240.0, 22.0),
-        ));
         pass_field.setFont(Some(&field_font));
 
         let error_label = NSTextField::labelWithString(&NSString::from_str(""), mtm);
@@ -459,7 +459,7 @@ mod macos_stats {
             window.setTitle(&NSString::from_str("TimeOracle"));
             window.center();
 
-            let content_view = unsafe { window.contentView() }.unwrap();
+            let content_view = window.contentView().unwrap();
 
             let bold_font = NSFont::boldSystemFontOfSize(13.0);
             let value_font = NSFont::systemFontOfSize(13.0);
@@ -482,7 +482,7 @@ mod macos_stats {
                     &label_color,
                     mtm,
                 );
-                unsafe { content_view.addSubview(&label) };
+                content_view.addSubview(&label);
 
                 let value = Self::make_label(
                     &NSString::from_str("—"),
@@ -491,7 +491,7 @@ mod macos_stats {
                     &value_color,
                     mtm,
                 );
-                unsafe { content_view.addSubview(&value) };
+                content_view.addSubview(&value);
                 value_fields.push(value);
             }
 
