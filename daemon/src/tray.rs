@@ -17,11 +17,16 @@ struct TrayState {
     status_item: MenuItem,
     server_item: MenuItem,
     pause_item_id: MenuId,
+    stats_item_id: MenuId,
     quit_item_id: MenuId,
     is_paused: bool,
     cmd_tx: tokio::sync::mpsc::Sender<EngineCommand>,
     shutdown_tx: tokio::sync::broadcast::Sender<()>,
     status_rx: tokio::sync::watch::Receiver<DaemonStatus>,
+    #[cfg(target_os = "macos")]
+    stats_window: macos_stats::StatsWindow,
+    #[cfg(target_os = "linux")]
+    stats_window: linux_stats::StatsWindow,
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -54,6 +59,7 @@ fn build_tray() -> anyhow::Result<(
     let server_item = MenuItem::new("Server: Unknown", false, None);
     let pause_item = MenuItem::new("Pause Tracking", true, None);
     let sync_item = MenuItem::new("Sync Now", false, None);
+    let stats_item = MenuItem::new("Show Stats", true, None);
     let quit_item = MenuItem::new("Quit", true, None);
 
     menu.append(&status_item).ok();
@@ -61,6 +67,7 @@ fn build_tray() -> anyhow::Result<(
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&pause_item).ok();
     menu.append(&sync_item).ok();
+    menu.append(&stats_item).ok();
     menu.append(&PredefinedMenuItem::separator()).ok();
     menu.append(&quit_item).ok();
 
@@ -73,6 +80,7 @@ fn build_tray() -> anyhow::Result<(
         .map_err(|e| anyhow::anyhow!("Failed to create tray icon: {e}"))?;
 
     let pause_item_id = pause_item.id().clone();
+    let stats_item_id = stats_item.id().clone();
     let quit_item_id = quit_item.id().clone();
 
     let state = TrayState {
@@ -80,11 +88,16 @@ fn build_tray() -> anyhow::Result<(
         status_item,
         server_item,
         pause_item_id,
+        stats_item_id,
         quit_item_id,
         is_paused: false,
         cmd_tx,
         shutdown_tx,
         status_rx,
+        #[cfg(target_os = "macos")]
+        stats_window: macos_stats::StatsWindow::default(),
+        #[cfg(target_os = "linux")]
+        stats_window: linux_stats::StatsWindow::default(),
     };
 
     Ok((state, cmd_rx, status_tx, buffer, tray))
@@ -144,6 +157,8 @@ fn poll_and_update(state: &mut TrayState) -> bool {
                 let _ = state.cmd_tx.blocking_send(EngineCommand::Resume);
                 state.pause_item.set_text("Pause Tracking");
             }
+        } else if event.id == state.stats_item_id {
+            state.stats_window.show();
         } else if event.id == state.quit_item_id {
             let _ = state.shutdown_tx.send(());
             return false;
@@ -161,8 +176,251 @@ fn poll_and_update(state: &mut TrayState) -> bool {
     };
     state.server_item.set_text(&server_text);
 
+    state.stats_window.update(&status);
+
     true
 }
+
+// ---------------------------------------------------------------------------
+// macOS stats window
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "macos")]
+mod macos_stats {
+    use crate::engine::DaemonStatus;
+    use objc2::rc::Retained;
+    use objc2::MainThreadOnly;
+    use objc2_app_kit::{
+        NSApplication, NSBackingStoreType, NSColor, NSFont, NSTextField, NSWindow,
+        NSWindowStyleMask,
+    };
+    use objc2_foundation::{MainThreadMarker, NSPoint, NSRect, NSSize, NSString};
+
+    pub struct StatsWindow {
+        window: Option<Retained<NSWindow>>,
+        status_label: Option<Retained<NSTextField>>,
+        server_label: Option<Retained<NSTextField>>,
+        buffered_label: Option<Retained<NSTextField>>,
+    }
+
+    impl Default for StatsWindow {
+        fn default() -> Self {
+            Self {
+                window: None,
+                status_label: None,
+                server_label: None,
+                buffered_label: None,
+            }
+        }
+    }
+
+    impl StatsWindow {
+        pub fn init(&mut self, mtm: MainThreadMarker) {
+            let window = unsafe {
+                NSWindow::initWithContentRect_styleMask_backing_defer(
+                    NSWindow::alloc(mtm),
+                    NSRect::new(NSPoint::new(100.0, 100.0), NSSize::new(300.0, 150.0)),
+                    NSWindowStyleMask::Titled
+                        | NSWindowStyleMask::Closable
+                        | NSWindowStyleMask::Miniaturizable,
+                    NSBackingStoreType::Buffered,
+                    false,
+                )
+            };
+            unsafe { window.setReleasedWhenClosed(false) };
+            window.setTitle(&NSString::from_str("TimeOracle"));
+            window.center();
+
+            let content_view = unsafe { window.contentView() }.unwrap();
+
+            let bold_font = NSFont::boldSystemFontOfSize(13.0);
+            let value_font = NSFont::systemFontOfSize(13.0);
+            let label_color = NSColor::secondaryLabelColor();
+            let value_color = NSColor::labelColor();
+
+            let rows: [(&str, f64); 3] = [
+                ("Status", 100.0),
+                ("Server", 65.0),
+                ("Buffered", 30.0),
+            ];
+
+            let mut value_fields = Vec::new();
+
+            for (text, y) in &rows {
+                let label = Self::make_label(
+                    &NSString::from_str(text),
+                    NSRect::new(NSPoint::new(20.0, *y), NSSize::new(80.0, 20.0)),
+                    &bold_font,
+                    &label_color,
+                    mtm,
+                );
+                unsafe { content_view.addSubview(&label) };
+
+                let value = Self::make_label(
+                    &NSString::from_str("—"),
+                    NSRect::new(NSPoint::new(110.0, *y), NSSize::new(170.0, 20.0)),
+                    &value_font,
+                    &value_color,
+                    mtm,
+                );
+                unsafe { content_view.addSubview(&value) };
+                value_fields.push(value);
+            }
+
+            self.status_label = Some(value_fields.remove(0));
+            self.server_label = Some(value_fields.remove(0));
+            self.buffered_label = Some(value_fields.remove(0));
+            self.window = Some(window);
+        }
+
+        fn make_label(
+            text: &NSString,
+            frame: NSRect,
+            font: &NSFont,
+            color: &NSColor,
+            mtm: MainThreadMarker,
+        ) -> Retained<NSTextField> {
+            let field = NSTextField::labelWithString(text, mtm);
+            field.setFrame(frame);
+            field.setFont(Some(font));
+            field.setTextColor(Some(color));
+            field
+        }
+
+        pub fn show(&self) {
+            if let Some(ref window) = self.window {
+                window.makeKeyAndOrderFront(None);
+                let app = NSApplication::sharedApplication(
+                    MainThreadMarker::new().expect("must be main thread"),
+                );
+                #[allow(deprecated)]
+                app.activateIgnoringOtherApps(true);
+            }
+        }
+
+        pub fn update(&self, status: &DaemonStatus) {
+            if let Some(ref label) = self.status_label {
+                label.setStringValue(&NSString::from_str(&format!("{}", status.state)));
+            }
+            if let Some(ref label) = self.server_label {
+                let text = if status.server_connected {
+                    "Connected"
+                } else {
+                    "Disconnected"
+                };
+                label.setStringValue(&NSString::from_str(text));
+            }
+            if let Some(ref label) = self.buffered_label {
+                label.setStringValue(&NSString::from_str(&format!(
+                    "{} events",
+                    status.events_buffered
+                )));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Linux stats window
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "linux")]
+mod linux_stats {
+    use crate::engine::DaemonStatus;
+    use gtk::prelude::*;
+
+    pub struct StatsWindow {
+        window: Option<gtk::Window>,
+        status_label: Option<gtk::Label>,
+        server_label: Option<gtk::Label>,
+        buffered_label: Option<gtk::Label>,
+    }
+
+    impl Default for StatsWindow {
+        fn default() -> Self {
+            Self {
+                window: None,
+                status_label: None,
+                server_label: None,
+                buffered_label: None,
+            }
+        }
+    }
+
+    impl StatsWindow {
+        pub fn init(&mut self) {
+            let window = gtk::Window::new(gtk::WindowType::Toplevel);
+            window.set_title("TimeOracle");
+            window.set_default_size(300, 150);
+            window.set_resizable(false);
+
+            window.connect_delete_event(|w, _| {
+                w.hide();
+                gtk::glib::Propagation::Stop
+            });
+
+            let grid = gtk::Grid::new();
+            grid.set_row_spacing(8);
+            grid.set_column_spacing(16);
+            grid.set_margin_top(20);
+            grid.set_margin_bottom(20);
+            grid.set_margin_start(20);
+            grid.set_margin_end(20);
+
+            let rows = ["Status", "Server", "Buffered"];
+            let mut value_labels = Vec::new();
+
+            for (i, name) in rows.iter().enumerate() {
+                let header = gtk::Label::new(None);
+                header.set_markup(&format!("<b>{name}</b>"));
+                header.set_halign(gtk::Align::Start);
+                grid.attach(&header, 0, i as i32, 1, 1);
+
+                let value = gtk::Label::new(Some("—"));
+                value.set_halign(gtk::Align::Start);
+                value.set_hexpand(true);
+                grid.attach(&value, 1, i as i32, 1, 1);
+
+                value_labels.push(value);
+            }
+
+            window.add(&grid);
+
+            self.status_label = Some(value_labels.remove(0));
+            self.server_label = Some(value_labels.remove(0));
+            self.buffered_label = Some(value_labels.remove(0));
+            self.window = Some(window);
+        }
+
+        pub fn show(&self) {
+            if let Some(ref window) = self.window {
+                window.show_all();
+                window.present();
+            }
+        }
+
+        pub fn update(&self, status: &DaemonStatus) {
+            if let Some(ref label) = self.status_label {
+                label.set_text(&format!("{}", status.state));
+            }
+            if let Some(ref label) = self.server_label {
+                let text = if status.server_connected {
+                    "Connected"
+                } else {
+                    "Disconnected"
+                };
+                label.set_text(text);
+            }
+            if let Some(ref label) = self.buffered_label {
+                label.set_text(&format!("{} events", status.events_buffered));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Linux
+// ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
 pub fn run(config: Config) -> anyhow::Result<()> {
@@ -170,6 +428,8 @@ pub fn run(config: Config) -> anyhow::Result<()> {
 
     let (mut state, cmd_rx, status_tx, buffer, _tray) = build_tray()?;
     spawn_background_runtime(config, buffer, cmd_rx, status_tx, &state.shutdown_tx);
+
+    state.stats_window.init();
 
     gtk::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
         if poll_and_update(&mut state) {
@@ -184,11 +444,14 @@ pub fn run(config: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// macOS
+// ---------------------------------------------------------------------------
+
 #[cfg(target_os = "macos")]
 pub fn run(config: Config) -> anyhow::Result<()> {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
-    use objc2_foundation::{NSDate, NSDefaultRunLoopMode, NSRunLoop};
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSEventMask};
+    use objc2_foundation::{MainThreadMarker, NSDate, NSDefaultRunLoopMode, NSRunLoop};
 
     let mtm = MainThreadMarker::new()
         .ok_or_else(|| anyhow::anyhow!("must be called from the main thread"))?;
@@ -199,12 +462,25 @@ pub fn run(config: Config) -> anyhow::Result<()> {
     let (mut state, cmd_rx, status_tx, buffer, _tray) = build_tray()?;
     spawn_background_runtime(config, buffer, cmd_rx, status_tx, &state.shutdown_tx);
 
+    state.stats_window.init(mtm);
+
+    app.finishLaunching();
+
+    let mode = unsafe { NSDefaultRunLoopMode };
     let run_loop = NSRunLoop::currentRunLoop();
+
     loop {
-        let date = unsafe { NSDate::dateWithTimeIntervalSinceNow(0.1) };
-        unsafe {
-            run_loop.runMode_beforeDate(NSDefaultRunLoopMode, &date);
+        let expiration = NSDate::dateWithTimeIntervalSinceNow(0.1);
+        let event = app.nextEventMatchingMask_untilDate_inMode_dequeue(
+            NSEventMask::Any,
+            Some(&expiration),
+            mode,
+            true,
+        );
+        if let Some(ref event) = event {
+            app.sendEvent(event);
         }
+        run_loop.runMode_beforeDate(mode, &expiration);
         if !poll_and_update(&mut state) {
             break;
         }
@@ -212,6 +488,10 @@ pub fn run(config: Config) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Unsupported platforms
+// ---------------------------------------------------------------------------
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn run(_config: Config) -> anyhow::Result<()> {
