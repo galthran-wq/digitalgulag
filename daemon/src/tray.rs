@@ -430,7 +430,6 @@ pub fn run(config: Config) -> anyhow::Result<()> {
     spawn_background_runtime(config, buffer, cmd_rx, status_tx, &state.shutdown_tx);
 
     state.stats_window.init();
-    state.stats_window.show();
 
     gtk::glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
         if poll_and_update(&mut state) {
@@ -452,7 +451,7 @@ pub fn run(config: Config) -> anyhow::Result<()> {
 #[cfg(target_os = "macos")]
 pub fn run(config: Config) -> anyhow::Result<()> {
     use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSEventMask};
-    use objc2_foundation::{MainThreadMarker, NSDate, NSDefaultRunLoopMode};
+    use objc2_foundation::{MainThreadMarker, NSDate, NSDefaultRunLoopMode, NSRunLoop};
 
     let mtm = MainThreadMarker::new()
         .ok_or_else(|| anyhow::anyhow!("must be called from the main thread"))?;
@@ -468,6 +467,7 @@ pub fn run(config: Config) -> anyhow::Result<()> {
     app.finishLaunching();
 
     let mode = unsafe { NSDefaultRunLoopMode };
+    let run_loop = NSRunLoop::currentRunLoop();
 
     loop {
         let expiration = NSDate::dateWithTimeIntervalSinceNow(0.1);
@@ -480,6 +480,7 @@ pub fn run(config: Config) -> anyhow::Result<()> {
         if let Some(ref event) = event {
             app.sendEvent(event);
         }
+        run_loop.runMode_beforeDate(mode, &expiration);
         if !poll_and_update(&mut state) {
             break;
         }
