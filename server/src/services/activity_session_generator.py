@@ -66,7 +66,9 @@ class ActivitySessionGenerator:
         if not events:
             return 0
 
-        cap_time = datetime.now(timezone.utc)
+        latest_event_time = max(e.timestamp for e in events)
+        end_of_event_day = datetime.combine(latest_event_time.date(), time.max, tzinfo=timezone.utc)
+        cap_time = min(datetime.now(timezone.utc), end_of_event_day)
         raw_sessions = self._build_sessions(events, cap_time)
         merged = self._merge_by_app(raw_sessions)
         filtered = [s for s in merged if self._duration_seconds(s) >= MIN_SESSION_DURATION_SECONDS]
