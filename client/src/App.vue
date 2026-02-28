@@ -11,10 +11,12 @@ const authStore = useAuthStore()
 <template>
   <NConfigProvider :theme="themeStore.theme">
     <NMessageProvider>
-      <AppLayout v-if="authStore.isAuthenticated">
-        <router-view />
-      </AppLayout>
-      <router-view v-else />
+      <AppLayout v-if="authStore.isAuthenticated" />
+      <router-view v-else v-slot="{ Component }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </router-view>
     </NMessageProvider>
   </NConfigProvider>
 </template>

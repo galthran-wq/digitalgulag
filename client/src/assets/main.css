@@ -32,3 +32,109 @@ body {
   border: none !important;
   border-radius: 4px;
 }
+
+.sx__time-grid-event {
+  z-index: auto !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Current-time indicator */
+.sx__current-time-indicator {
+  background-color: #EF4444;
+}
+
+.sx__current-time-line {
+  border-color: #EF4444;
+}
+
+/* Page transitions */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+/* TimeGridEvent custom card */
+.tge-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-left: 3px solid #3B82F6;
+  background: #EEF4FC;
+  border-radius: 3px;
+}
+
+.tge-card.is-dark {
+  background: #1A2E44;
+}
+
+.tge-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 2px 4px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, #EEF4FC 0%, rgba(238, 244, 252, 0.8) 40%, transparent 70%);
+  border-radius: 2px;
+}
+
+.is-dark .tge-text {
+  background: linear-gradient(to bottom, #1A2E44 0%, rgba(26, 46, 68, 0.8) 40%, transparent 70%);
+}
+
+.tge-title {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 255, 255, 0.7);
+}
+
+.is-dark .tge-title {
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.7);
+}
+
+.tge-category {
+  font-size: 11px;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+}
+
+.is-dark .tge-category {
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+}
+
+.tge-description {
+  font-size: 11px;
+  line-height: 1.3;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+}
+
+.is-dark .tge-description {
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+}
+
+/* Consistent card styling */
+.n-card {
+  border-radius: 8px;
+}

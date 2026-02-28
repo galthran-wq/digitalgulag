@@ -1,10 +1,5 @@
 import type { ActivitySession } from '@/types/activity'
-
-interface SessionColor {
-  main: string
-  container: string
-  onContainer: string
-}
+import type { SessionColor } from '@/constants/palette'
 
 interface DayBoundaries {
   start: number
@@ -168,6 +163,14 @@ export function createSessionLinesPlugin(palette: SessionColor[]) {
     rendering = false
   }
 
+  function isDark(): boolean {
+    try {
+      return $app?.config?.isDark?.value ?? false
+    } catch {
+      return false
+    }
+  }
+
   function renderDayColumn(
     dayEl: HTMLElement,
     dateStr: string,
@@ -184,12 +187,13 @@ export function createSessionLinesPlugin(palette: SessionColor[]) {
 
     const dayBounds = getDayBounds()
     const pointsPerDay = getPointsPerDay()
+    const dark = isDark()
 
     const { assignments } = assignLanes(daySessions)
 
     const container = document.createElement('div')
     container.className = 'session-lines-container'
-    container.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:0;overflow:hidden;`
+    container.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:3;overflow:hidden;`
 
     for (const { session, lane } of assignments) {
       const colorIdx = appColorMap.get(session.app_name)!
@@ -205,6 +209,7 @@ export function createSessionLinesPlugin(palette: SessionColor[]) {
       if (heightPct <= 0) continue
 
       const leftOffset = lane * STRIP_WIDTH
+      const bg = dark ? color.darkContainer : color.container
 
       const strip = document.createElement('div')
       strip.className = 'session-strip'
@@ -215,12 +220,13 @@ export function createSessionLinesPlugin(palette: SessionColor[]) {
         `height:${heightPct}%`,
         `left:${leftOffset}px`,
         `width:${STRIP_WIDTH}px`,
-        `background:${color.container}`,
+        `background:${bg}`,
         `border-left:3px solid ${color.main}`,
         'border-radius:2px',
         'box-sizing:border-box',
         'pointer-events:auto',
         'cursor:default',
+        `opacity:${dark ? '0.6' : '0.75'}`,
       ].join(';') + ';'
 
       if (session.icon) {
@@ -231,6 +237,7 @@ export function createSessionLinesPlugin(palette: SessionColor[]) {
         img.style.cssText = 'display:block;margin:4px auto 0;pointer-events:none;'
         strip.appendChild(img)
       } else if (sessionDurationMinutes(session) >= MIN_HEIGHT_FOR_INITIAL) {
+        const textColor = dark ? color.darkOnContainer : color.onContainer
         const initial = document.createElement('div')
         initial.textContent = session.app_name.charAt(0).toUpperCase()
         initial.style.cssText = [
@@ -239,8 +246,8 @@ export function createSessionLinesPlugin(palette: SessionColor[]) {
           'font-size:14px',
           'font-weight:600',
           'line-height:1',
-          `color:${color.onContainer}`,
-          'opacity:0.6',
+          `color:${textColor}`,
+          `opacity:${dark ? '1.67' : '1.33'}`,
           'pointer-events:none',
           'user-select:none',
         ].join(';') + ';'
