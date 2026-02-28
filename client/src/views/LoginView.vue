@@ -34,10 +34,10 @@ async function handleSubmit() {
 <template>
   <div class="login-page">
     <div style="text-align: center; margin-bottom: 32px">
-      <div style="font-size: 36px; font-weight: 700; color: #3B82F6; margin-bottom: 8px">TimeOracle</div>
+      <div class="login-brand">TimeOracle</div>
       <NText depth="3" style="font-size: 14px">AI-powered time tracking</NText>
     </div>
-    <NCard style="max-width: 400px; width: 100%; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.12)">
+    <NCard class="login-card">
       <NForm @submit.prevent="handleSubmit">
         <NAlert v-if="error" type="error" :title="error" style="margin-bottom: 16px" closable />
         <NFormItem label="Email">
@@ -75,6 +75,20 @@ async function handleSubmit() {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  background: linear-gradient(135deg, var(--to-login-bg-1) 0%, var(--to-login-bg-2) 50%, var(--to-login-bg-1) 100%);
+}
+
+.login-brand {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--to-brand);
+  margin-bottom: 8px;
+}
+
+.login-card {
+  max-width: 400px;
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
 }
 </style>

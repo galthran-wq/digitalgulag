@@ -1,3 +1,9 @@
+export const DEFAULT_ENTRY_COLOR = '#3B82F6'
+
+export const CATEGORY_COLORS = [
+  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6',
+]
+
 export interface SessionColor {
   main: string
   container: string

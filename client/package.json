@@ -24,6 +24,7 @@
     "@schedule-x/resize": "^3.7.3",
     "@schedule-x/theme-default": "^3.7.3",
     "@schedule-x/vue": "^3.6.0",
+    "@vicons/ionicons5": "^0.13.0",
     "date-fns": "^4.1.0",
     "naive-ui": "^2.41.0",
     "pinia": "^3.0.3",

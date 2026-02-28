@@ -28,6 +28,7 @@ const themeStore = useThemeStore()
 const showForm = ref(false)
 const editingEntry = ref<TimelineEntry | null>(null)
 const clickedTime = ref<string | undefined>(undefined)
+const clickPos = ref<{ x: number; y: number } | undefined>(undefined)
 const showSessions = ref(localStorage.getItem('showSessions') !== 'false')
 
 const dragAndDrop = createDragAndDropPlugin()
@@ -85,15 +86,19 @@ const calendar = createCalendar({
     },
   },
   callbacks: {
-    onEventClick(event) {
-      const entry = timelineStore.entries.find((e) => e.id === String(event.id))
+    onEventClick(event, e) {
+      const entry = timelineStore.entries.find((en) => en.id === String(event.id))
       if (entry) {
+        const me = e as MouseEvent
+        clickPos.value = { x: me.clientX, y: me.clientY }
         editingEntry.value = entry
         clickedTime.value = undefined
         showForm.value = true
       }
     },
-    onClickDateTime(dateTime) {
+    onClickDateTime(dateTime, e) {
+      const me = e as MouseEvent
+      clickPos.value = me ? { x: me.clientX, y: me.clientY } : undefined
       editingEntry.value = null
       clickedTime.value = new Date(dateTime.epochMilliseconds).toISOString()
       showForm.value = true
@@ -199,7 +204,8 @@ async function handleDelete(id: string) {
   }
 }
 
-function openCreate() {
+function openCreate(e: MouseEvent) {
+  clickPos.value = { x: e.clientX, y: e.clientY }
   editingEntry.value = null
   clickedTime.value = undefined
   showForm.value = true
@@ -208,11 +214,11 @@ function openCreate() {
 
 <template>
   <div style="height: 100%; display: flex; flex-direction: column">
-    <NSpace justify="end" align="center" style="margin-bottom: 12px">
+    <NSpace justify="end" align="center" style="margin-bottom: 16px">
       <NSpace v-if="showSessions && sessionApps.length" :size="8" align="center">
         <template v-for="item in sessionApps" :key="item.app">
           <NSpace :size="4" align="center">
-            <div :style="{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: item.container, borderLeft: `3px solid ${item.main}`, boxSizing: 'border-box' }" />
+            <div class="legend-dot" :style="{ backgroundColor: item.container, borderLeftColor: item.main }" />
             <NText depth="3" style="font-size: 12px">{{ item.app }}</NText>
           </NSpace>
         </template>
@@ -244,11 +250,9 @@ function openCreate() {
       :entry="editingEntry"
       :date="timelineStore.selectedDate"
       :default-start-time="clickedTime"
+      :click-pos="clickPos"
       @save="handleSave"
       @delete="handleDelete"
     />
   </div>
 </template>
-
-<style>
-</style>
