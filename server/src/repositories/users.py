@@ -143,7 +143,7 @@ class UserRepository(UserRepositoryInterface):
             user = await self.get_user(user_id)
             if not user:
                 raise ValueError("User not found")
-            existing = user.session_config or {}
+            existing = dict(user.session_config or {})
             existing.update(config_dict)
             user.session_config = existing
             await self.session.commit()
