@@ -277,6 +277,189 @@ class TestActivitySessionGenerator:
         assert firefox.url == "https://example.com"
 
 
+    async def test_merge_gap_exact_boundary(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """Gap of exactly 300s merges (<=), gap of 301s does not."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        base = datetime(2026, 2, 22, 14, 0, tzinfo=timezone.utc)
+        events = [
+            # Chrome block A: 14:00 - 14:05
+            _event("active_window", base, app_name="Chrome", window_title="Tab 1"),
+            _event("active_window", base + timedelta(minutes=5), app_name="Other", window_title="x"),
+            # Chrome block B at 14:10 (gap from Chrome A end at 14:05 = 300s exactly — merges)
+            _event("active_window", base + timedelta(minutes=10), app_name="Chrome", window_title="Tab 2"),
+            _event("active_window", base + timedelta(minutes=15), app_name="Other", window_title="y"),
+            # Chrome block C at 14:20:01 (gap from merged Chrome end at 14:15 = 301s — separate)
+            _event("active_window", base + timedelta(minutes=20, seconds=1), app_name="Chrome", window_title="Tab 3"),
+            _event("active_window", base + timedelta(minutes=25), app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        await generator.generate_for_date(test_user.id, date(2026, 2, 22))
+
+        sessions = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 22), date(2026, 2, 22), limit=100, offset=0,
+        )
+        chrome_sessions = [s for s in sessions if s.app_name == "Chrome"]
+        assert len(chrome_sessions) == 2
+        assert chrome_sessions[0].start_time == base
+        assert chrome_sessions[0].end_time == base + timedelta(minutes=15)
+        assert chrome_sessions[1].start_time == base + timedelta(minutes=20, seconds=1)
+
+    async def test_noise_threshold_exact_boundary(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """Session of exactly 120s is kept (not < 120); 119s is dropped."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        base = datetime(2026, 2, 22, 14, 0, tzinfo=timezone.utc)
+        events = [
+            # Anchor session
+            _event("active_window", base, app_name="VSCode", window_title="main.py"),
+            # 119s session — should be dropped (finalized + short)
+            _event("active_window", base + timedelta(minutes=30), app_name="Short119", window_title="x"),
+            _event("active_window", base + timedelta(minutes=30, seconds=119), app_name="Filler", window_title="y"),
+            # 120s session — should be kept (120 < 120 is false)
+            _event("active_window", base + timedelta(minutes=40), app_name="Exact120", window_title="z"),
+            _event("active_window", base + timedelta(minutes=42), app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        await generator.generate_for_date(test_user.id, date(2026, 2, 22))
+
+        sessions = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 22), date(2026, 2, 22), limit=100, offset=0,
+        )
+        app_names = [s.app_name for s in sessions]
+        assert "Short119" not in app_names
+        assert "Exact120" in app_names
+
+    async def test_cross_midnight_session_split(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """A session spanning midnight is split into two halves with correct dates."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        events = [
+            _event("active_window", datetime(2026, 2, 22, 23, 50, tzinfo=timezone.utc),
+                   app_name="VSCode", window_title="main.py"),
+            _event("active_window", datetime(2026, 2, 23, 0, 10, tzinfo=timezone.utc),
+                   app_name="Chrome", window_title="Docs"),
+            _event("active_window", datetime(2026, 2, 23, 0, 20, tzinfo=timezone.utc),
+                   app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        timestamps = [e.timestamp for e in events]
+        await generator.generate_incremental(test_user.id, timestamps)
+
+        sessions_22 = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 22), date(2026, 2, 22), limit=100, offset=0,
+        )
+        sessions_23 = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 23), date(2026, 2, 23), limit=100, offset=0,
+        )
+
+        # VSCode 23:50→00:10 split at midnight
+        vscode_22 = [s for s in sessions_22 if s.app_name == "VSCode"]
+        assert len(vscode_22) == 1
+        assert vscode_22[0].start_time == datetime(2026, 2, 22, 23, 50, tzinfo=timezone.utc)
+        assert vscode_22[0].end_time == datetime(2026, 2, 23, 0, 0, tzinfo=timezone.utc)
+        assert vscode_22[0].date == date(2026, 2, 22)
+
+        vscode_23 = [s for s in sessions_23 if s.app_name == "VSCode"]
+        assert len(vscode_23) == 1
+        assert vscode_23[0].start_time == datetime(2026, 2, 23, 0, 0, tzinfo=timezone.utc)
+        assert vscode_23[0].end_time == datetime(2026, 2, 23, 0, 10, tzinfo=timezone.utc)
+        assert vscode_23[0].date == date(2026, 2, 23)
+
+    async def test_url_merge_keeps_first_non_null(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """When merging same-app sessions, the first non-null URL wins."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        base = datetime(2026, 2, 22, 14, 0, tzinfo=timezone.utc)
+        events = [
+            _event("active_window", base, app_name="Chrome", window_title="Tab 1", url="https://first.com"),
+            _event("active_window", base + timedelta(minutes=2), app_name="Terminal", window_title="bash"),
+            _event("active_window", base + timedelta(minutes=4), app_name="Chrome", window_title="Tab 2", url="https://second.com"),
+            _event("active_window", base + timedelta(minutes=10), app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        await generator.generate_for_date(test_user.id, date(2026, 2, 22))
+
+        sessions = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 22), date(2026, 2, 22), limit=100, offset=0,
+        )
+        chrome = [s for s in sessions if s.app_name == "Chrome"][0]
+        assert chrome.url == "https://first.com"
+
+    async def test_url_merge_adopts_from_later_segment(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """When first segment has no URL, later segment's URL is adopted."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        base = datetime(2026, 2, 22, 14, 0, tzinfo=timezone.utc)
+        events = [
+            _event("active_window", base, app_name="Chrome", window_title="Tab 1"),
+            _event("active_window", base + timedelta(minutes=2), app_name="Terminal", window_title="bash"),
+            _event("active_window", base + timedelta(minutes=4), app_name="Chrome", window_title="Tab 2", url="https://adopted.com"),
+            _event("active_window", base + timedelta(minutes=10), app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        await generator.generate_for_date(test_user.id, date(2026, 2, 22))
+
+        sessions = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 22), date(2026, 2, 22), limit=100, offset=0,
+        )
+        chrome = [s for s in sessions if s.app_name == "Chrome"][0]
+        assert chrome.url == "https://adopted.com"
+
+    async def test_consecutive_idle_starts(
+        self, db_session: AsyncSession, test_user: UserModel,
+    ):
+        """Double idle_start: session closes at first, second is harmless."""
+        activity_repo = ActivityEventRepository(db_session)
+        session_repo = ActivitySessionRepository(db_session)
+        generator = ActivitySessionGenerator(activity_repo, session_repo)
+
+        base = datetime(2026, 2, 22, 14, 0, tzinfo=timezone.utc)
+        events = [
+            _event("active_window", base, app_name="VSCode", window_title="main.py"),
+            _event("idle_start", base + timedelta(minutes=10)),
+            _event("idle_start", base + timedelta(minutes=12)),
+            _event("active_window", base + timedelta(minutes=20), app_name="Chrome", window_title="Docs"),
+            _event("active_window", base + timedelta(minutes=30), app_name="Firefox", window_title="End"),
+        ]
+        await _seed_events(activity_repo, test_user.id, events)
+
+        await generator.generate_for_date(test_user.id, date(2026, 2, 22))
+
+        sessions = await session_repo.get_by_date_range(
+            test_user.id, date(2026, 2, 22), date(2026, 2, 22), limit=100, offset=0,
+        )
+        vscode = [s for s in sessions if s.app_name == "VSCode"][0]
+        assert vscode.end_time == base + timedelta(minutes=10)
+
+        chrome = [s for s in sessions if s.app_name == "Chrome"][0]
+        assert chrome.start_time == base + timedelta(minutes=20)
+
     async def test_rapid_app_switching_merges_by_app(
         self, db_session: AsyncSession, test_user: UserModel,
     ):
