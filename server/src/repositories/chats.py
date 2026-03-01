@@ -5,7 +5,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.postgres.chats import ChatModel
@@ -26,6 +26,12 @@ class ChatRepositoryInterface(ABC):
 
     @abstractmethod
     async def get_active_chat(self, user_id: UUID, target_date: date) -> Optional[ChatModel]:
+        pass
+
+    @abstractmethod
+    async def list_for_user(
+        self, user_id: UUID, limit: int = 20, offset: int = 0,
+    ) -> tuple[list[ChatModel], int]:
         pass
 
     @abstractmethod
@@ -77,6 +83,25 @@ class ChatRepository(ChatRepositoryInterface):
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def list_for_user(
+        self, user_id: UUID, limit: int = 20, offset: int = 0,
+    ) -> tuple[list[ChatModel], int]:
+        """List chats for a user, excluding cron-triggered ones."""
+        base = select(ChatModel).where(
+            ChatModel.user_id == user_id,
+            ChatModel.trigger.in_(["chat", "generate"]),
+        )
+        count_result = await self.session.execute(
+            select(func.count()).select_from(base.subquery())
+        )
+        total = count_result.scalar() or 0
+
+        result = await self.session.execute(
+            base.order_by(ChatModel.created_at.desc())
+            .limit(limit).offset(offset)
+        )
+        return list(result.scalars().all()), total
 
     async def update_messages(
         self, chat_id: UUID, messages_json: str,

@@ -13,7 +13,10 @@ from src.core.config import settings
 from src.core.database import get_postgres_session
 from src.models.postgres.users import UserModel
 from src.repositories.chats import ChatRepository
-from src.schemas.chat import ChatRequest, GenerateRequest, GenerateResponse
+from src.schemas.chat import (
+    ChatRequest, ChatDetail, ChatListResponse, ChatMessageItem,
+    ChatSummary, GenerateRequest, GenerateResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,93 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 def _sse_event(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
+def _parse_messages(raw_messages: list | None) -> list[ChatMessageItem]:
+    """Extract user/assistant messages from pydantic-ai JSONB format."""
+    if not raw_messages:
+        return []
+    items = []
+    for msg in raw_messages:
+        kind = msg.get("kind")
+        for part in msg.get("parts", []):
+            pk = part.get("part_kind")
+            content = part.get("content")
+            if not content or not isinstance(content, str):
+                continue
+            if kind == "request" and pk == "user-prompt":
+                items.append(ChatMessageItem(role="user", content=content))
+            elif kind == "response" and pk == "text":
+                items.append(ChatMessageItem(role="assistant", content=content))
+    return items
+
+
+def _preview_from_messages(raw_messages: list | None) -> str:
+    """Get first user message as preview text."""
+    if not raw_messages:
+        return ""
+    for msg in raw_messages:
+        if msg.get("kind") != "request":
+            continue
+        for part in msg.get("parts", []):
+            if part.get("part_kind") == "user-prompt":
+                text = part.get("content", "")
+                if isinstance(text, str) and text:
+                    return text[:100]
+    return ""
+
+
+@router.get("/chats", response_model=ChatListResponse)
+async def list_chats(
+    limit: int = 20,
+    offset: int = 0,
+    current_user: UserModel = Depends(get_current_user),
+    session: AsyncSession = Depends(get_postgres_session),
+):
+    chat_repo = ChatRepository(session)
+    chats, total = await chat_repo.list_for_user(current_user.id, limit=limit, offset=offset)
+    summaries = [
+        ChatSummary(
+            id=c.id,
+            date=c.date,
+            trigger=c.trigger,
+            created_at=c.created_at,
+            total_input_tokens=c.total_input_tokens,
+            total_output_tokens=c.total_output_tokens,
+            preview=_preview_from_messages(c.messages),
+        )
+        for c in chats
+    ]
+    return ChatListResponse(chats=summaries, total_count=total)
+
+
+@router.get("/chats/{chat_id}", response_model=ChatDetail)
+async def get_chat(
+    chat_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    session: AsyncSession = Depends(get_postgres_session),
+):
+    from uuid import UUID as PyUUID
+    try:
+        cid = PyUUID(chat_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid chat ID")
+
+    chat_repo = ChatRepository(session)
+    chat = await chat_repo.get_by_id(cid)
+    if not chat or chat.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    return ChatDetail(
+        id=chat.id,
+        date=chat.date,
+        trigger=chat.trigger,
+        created_at=chat.created_at,
+        total_input_tokens=chat.total_input_tokens,
+        total_output_tokens=chat.total_output_tokens,
+        preview=_preview_from_messages(chat.messages),
+        messages=_parse_messages(chat.messages),
+    )
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -49,7 +139,7 @@ async def chat_stream(
     current_user: UserModel = Depends(get_current_user),
     session: AsyncSession = Depends(get_postgres_session),
 ):
-    target_date = body.date or date.today()
+    target_date = date.today()
     chat_repo = ChatRepository(session)
 
     # Find or create chat session for this user+date

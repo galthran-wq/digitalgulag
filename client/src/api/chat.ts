@@ -1,7 +1,19 @@
-import { ApiError } from './client'
+import { ApiError, get } from './client'
+import type { ChatListResponse, ChatDetail } from '@/types/chat'
+
+export function listChats(limit = 20, offset = 0): Promise<ChatListResponse> {
+  return get<ChatListResponse>('/api/agent/chats', {
+    limit: String(limit),
+    offset: String(offset),
+  })
+}
+
+export function getChat(chatId: string): Promise<ChatDetail> {
+  return get<ChatDetail>(`/api/agent/chats/${chatId}`)
+}
 
 export async function chatStream(
-  data: { message: string; date?: string },
+  data: { message: string },
   callbacks: {
     onText: (text: string) => void
     onDone: () => void
