@@ -106,6 +106,13 @@ const calendar = createCalendar({
     onSelectedDateUpdate(date) {
       timelineStore.selectedDate = date.toString()
     },
+    onRangeUpdate(range) {
+      const start = range.start as Temporal.ZonedDateTime
+      const end = range.end as Temporal.ZonedDateTime
+      const ms = end.epochMilliseconds - start.epochMilliseconds
+      timelineStore.viewMode = ms > 86_400_000 ? 'week' : 'day'
+      timelineStore.rangeStart = start.toPlainDate().toString()
+    },
     async onEventUpdate(updatedEvent) {
       try {
         const start = updatedEvent.start as Temporal.ZonedDateTime
@@ -153,14 +160,14 @@ watch(() => activityStore.sessions, syncEvents, { deep: true })
 watch(() => themeStore.isDark, (dark) => calendar.setTheme(dark ? 'dark' : 'light'))
 
 watch(
-  () => timelineStore.selectedDate,
-  (date) => activityStore.fetchSessions(date),
+  [() => timelineStore.rangeStart, () => timelineStore.viewMode],
+  ([date, range]) => activityStore.fetchSessions(date, range),
 )
 
 onMounted(async () => {
   await Promise.all([
     timelineStore.fetchEntries(),
-    activityStore.fetchSessions(timelineStore.selectedDate),
+    activityStore.fetchSessions(timelineStore.rangeStart, timelineStore.viewMode),
   ])
 })
 

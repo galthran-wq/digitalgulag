@@ -6,6 +6,8 @@ import type { TimelineEntry, TimelineEntryCreate, TimelineEntryUpdate } from '@/
 
 export const useTimelineStore = defineStore('timeline', () => {
   const selectedDate = ref(format(new Date(), 'yyyy-MM-dd'))
+  const rangeStart = ref(selectedDate.value)
+  const viewMode = ref<'day' | 'week'>('day')
   const entries = ref<TimelineEntry[]>([])
   const totalCount = ref(0)
   const loading = ref(false)
@@ -13,7 +15,7 @@ export const useTimelineStore = defineStore('timeline', () => {
   async function fetchEntries() {
     loading.value = true
     try {
-      const res = await api.listEntries({ date: selectedDate.value, range: 'day', limit: 500 })
+      const res = await api.listEntries({ date: rangeStart.value, range: viewMode.value, limit: 500 })
       entries.value = res.entries
       totalCount.value = res.total_count
     } finally {
@@ -51,10 +53,12 @@ export const useTimelineStore = defineStore('timeline', () => {
     }))
   }
 
-  watch(selectedDate, fetchEntries)
+  watch([rangeStart, viewMode], fetchEntries)
 
   return {
     selectedDate,
+    rangeStart,
+    viewMode,
     entries,
     totalCount,
     loading,
