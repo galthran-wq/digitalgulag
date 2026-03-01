@@ -11,19 +11,20 @@ export const useChatStore = defineStore('chat', () => {
   const streaming = ref(false)
   const error = ref<string | null>(null)
 
+  // Active chat session — tracks backend chat_id for conversation continuity
+  const activeChatId = ref<string | null>(null)
+
   // History
   const activeView = ref<'chat' | 'history'>('chat')
   const chatList = ref<ChatSummary[]>([])
   const chatListTotal = ref(0)
   const loadingHistory = ref(false)
-  const viewingChatId = ref<string | null>(null)
 
   let abortController: AbortController | null = null
 
   async function sendMessage(content: string) {
     if (streaming.value) return
     error.value = null
-    viewingChatId.value = null
 
     messages.value.push({
       id: uid(),
@@ -46,12 +47,14 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       await chatStream(
-        { message: content },
+        { message: content, chat_id: activeChatId.value ?? undefined },
         {
           onText(text) {
             assistantMsg.content += text
           },
-          onDone() {},
+          onDone(chatId) {
+            if (chatId) activeChatId.value = chatId
+          },
           onError(err) {
             error.value = err
           },
@@ -78,7 +81,7 @@ export const useChatStore = defineStore('chat', () => {
   function clearMessages() {
     messages.value = []
     error.value = null
-    viewingChatId.value = null
+    activeChatId.value = null
   }
 
   async function fetchHistory() {
@@ -104,7 +107,7 @@ export const useChatStore = defineStore('chat', () => {
         content: m.content,
         timestamp: detail.created_at,
       }))
-      viewingChatId.value = chatId
+      activeChatId.value = chatId
       activeView.value = 'chat'
     } catch (e: any) {
       error.value = e.message ?? 'Failed to load chat'
@@ -131,7 +134,7 @@ export const useChatStore = defineStore('chat', () => {
     chatList,
     chatListTotal,
     loadingHistory,
-    viewingChatId,
+    activeChatId,
     sendMessage,
     cancelStream,
     clearMessages,

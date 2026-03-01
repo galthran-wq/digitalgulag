@@ -69,7 +69,6 @@ async def generate_timeline(
     chat_repo = ChatRepository(session)
     chat = await chat_repo.create(
         user_id=user_id,
-        target_date=target_date,
         trigger="generate",
         llm_model=model or (user_session_config or {}).get("llm_model") or settings.default_llm_model,
     )

@@ -73,7 +73,6 @@ async def list_chats(
     summaries = [
         ChatSummary(
             id=c.id,
-            date=c.date,
             trigger=c.trigger,
             created_at=c.created_at,
             total_input_tokens=c.total_input_tokens,
@@ -104,7 +103,6 @@ async def get_chat(
 
     return ChatDetail(
         id=chat.id,
-        date=chat.date,
         trigger=chat.trigger,
         created_at=chat.created_at,
         total_input_tokens=chat.total_input_tokens,
@@ -139,18 +137,25 @@ async def chat_stream(
     current_user: UserModel = Depends(get_current_user),
     session: AsyncSession = Depends(get_postgres_session),
 ):
-    target_date = date.today()
     chat_repo = ChatRepository(session)
 
-    # Find or create chat session for this user+date
     user_cfg = current_user.session_config or {}
     effective_model = user_cfg.get("llm_model") or settings.chat_llm_model
 
-    chat = await chat_repo.get_active_chat(current_user.id, target_date)
+    # Resume existing chat or create a new one
+    chat = None
+    if body.chat_id:
+        from uuid import UUID as PyUUID
+        try:
+            chat = await chat_repo.get_by_id(PyUUID(body.chat_id))
+            if chat and chat.user_id != current_user.id:
+                chat = None
+        except (ValueError, Exception):
+            pass
+
     if not chat:
         chat = await chat_repo.create(
             user_id=current_user.id,
-            target_date=target_date,
             trigger="chat",
             llm_model=effective_model,
         )
@@ -174,7 +179,6 @@ async def chat_stream(
     deps = _build_deps(
         user_id=current_user.id,
         session=session,
-        target_date=target_date,
         chat_id=chat.id,
         user_session_config=current_user.session_config,
         event_queue=event_queue,
@@ -205,7 +209,7 @@ async def chat_stream(
                     output_tokens=result.usage().response_tokens or 0,
                 )
 
-            await event_queue.put(("done", {}))
+            await event_queue.put(("done", {"chat_id": str(chat.id)}))
         except Exception as e:
             logger.exception("Agent error in chat %s", chat.id)
             await event_queue.put(("error", {"error": str(e)}))

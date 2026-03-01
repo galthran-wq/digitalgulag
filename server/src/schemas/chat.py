@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    chat_id: Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -25,7 +26,6 @@ class ChatMessageItem(BaseModel):
 
 class ChatSummary(BaseModel):
     id: UUID
-    date: Optional[date]
     trigger: str
     created_at: datetime
     total_input_tokens: int

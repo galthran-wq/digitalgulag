@@ -73,7 +73,7 @@ function handleKeydown(e: KeyboardEvent) {
       <NText strong>AI Agent</NText>
       <div style="display: flex; align-items: center; gap: 4px">
         <NButton
-          v-if="!isHistory && chatStore.viewingChatId"
+          v-if="!isHistory && chatStore.activeChatId"
           quaternary
           size="tiny"
           @click="chatStore.newChat()"
@@ -112,10 +112,7 @@ function handleKeydown(e: KeyboardEvent) {
           @click="chatStore.loadChat(chat.id)"
         >
           <div class="history-item-top">
-            <NText style="font-size: var(--to-text-sm)">
-              {{ chat.date ?? 'No date' }}
-            </NText>
-            <NText depth="3" style="font-size: var(--to-text-xs)">
+            <NText depth="3" style="font-size: var(--to-text-sm)">
               {{ formatDate(chat.created_at) }}
             </NText>
           </div>

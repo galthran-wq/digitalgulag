@@ -7,7 +7,6 @@ export interface ChatMessage {
 
 export interface ChatSummary {
   id: string
-  date: string | null
   trigger: string
   created_at: string
   total_input_tokens: number

@@ -13,10 +13,10 @@ export function getChat(chatId: string): Promise<ChatDetail> {
 }
 
 export async function chatStream(
-  data: { message: string },
+  data: { message: string; chat_id?: string },
   callbacks: {
     onText: (text: string) => void
-    onDone: () => void
+    onDone: (chatId?: string) => void
     onError: (error: string) => void
   },
   signal?: AbortSignal,
@@ -73,7 +73,7 @@ export async function chatStream(
           if (eventType === 'text') {
             callbacks.onText(parsed.text)
           } else if (eventType === 'done') {
-            callbacks.onDone()
+            callbacks.onDone(parsed.chat_id)
           } else if (eventType === 'error') {
             callbacks.onError(parsed.error)
           }

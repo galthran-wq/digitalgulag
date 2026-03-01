@@ -12,7 +12,6 @@ import { useTimelineStore } from '@/stores/timeline'
 import { useActivityStore } from '@/stores/activity'
 import { useThemeStore } from '@/stores/theme'
 import { ApiError } from '@/api/client'
-import { useChatStore } from '@/stores/chat'
 import { createSessionLinesPlugin } from '@/plugins/sessionLines'
 import ChatPanel from '@/components/ChatPanel.vue'
 import TimelineEntryForm from '@/components/TimelineEntryForm.vue'
@@ -27,7 +26,6 @@ const message = useMessage()
 const timelineStore = useTimelineStore()
 const activityStore = useActivityStore()
 const themeStore = useThemeStore()
-const chatStore = useChatStore()
 
 const showForm = ref(false)
 const editingEntry = ref<TimelineEntry | null>(null)
@@ -173,8 +171,6 @@ watch(
   [() => timelineStore.rangeStart, () => timelineStore.viewMode],
   ([date, range]) => activityStore.fetchSessions(date, range),
 )
-
-watch(() => timelineStore.selectedDate, () => chatStore.clearMessages())
 
 onMounted(async () => {
   await Promise.all([

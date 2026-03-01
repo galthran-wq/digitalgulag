@@ -1,7 +1,6 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -16,16 +15,12 @@ logger = logging.getLogger(__name__)
 class ChatRepositoryInterface(ABC):
     @abstractmethod
     async def create(
-        self, user_id: UUID, target_date: date | None, trigger: str, llm_model: str,
+        self, user_id: UUID, trigger: str, llm_model: str,
     ) -> ChatModel:
         pass
 
     @abstractmethod
     async def get_by_id(self, chat_id: UUID) -> Optional[ChatModel]:
-        pass
-
-    @abstractmethod
-    async def get_active_chat(self, user_id: UUID, target_date: date) -> Optional[ChatModel]:
         pass
 
     @abstractmethod
@@ -47,12 +42,11 @@ class ChatRepository(ChatRepositoryInterface):
         self.session = session
 
     async def create(
-        self, user_id: UUID, target_date: date | None, trigger: str, llm_model: str,
+        self, user_id: UUID, trigger: str, llm_model: str,
     ) -> ChatModel:
         try:
             chat = ChatModel(
                 user_id=user_id,
-                date=target_date,
                 trigger=trigger,
                 llm_model=llm_model,
             )
@@ -67,20 +61,6 @@ class ChatRepository(ChatRepositoryInterface):
     async def get_by_id(self, chat_id: UUID) -> Optional[ChatModel]:
         result = await self.session.execute(
             select(ChatModel).where(ChatModel.id == chat_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def get_active_chat(self, user_id: UUID, target_date: date) -> Optional[ChatModel]:
-        """Get the most recent interactive chat for a user+date."""
-        result = await self.session.execute(
-            select(ChatModel)
-            .where(
-                ChatModel.user_id == user_id,
-                ChatModel.date == target_date,
-                ChatModel.trigger == "chat",
-            )
-            .order_by(ChatModel.created_at.desc())
-            .limit(1)
         )
         return result.scalar_one_or_none()
 
