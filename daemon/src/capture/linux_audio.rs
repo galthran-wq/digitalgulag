@@ -2,7 +2,7 @@ use crate::capture::AudioSource;
 use crate::error::Result;
 use crate::events::{AudioInfo, AudioPlaybackState, AudioStream};
 use pulsectl::controllers::AppControl;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 const MAX_STREAMS: usize = 10;
 const MAX_STRING_LEN: usize = 200;
@@ -20,17 +20,23 @@ impl AudioSource for LinuxAudioSource {
         let mpris_streams = get_mpris_streams();
         let pulse_streams = get_pulse_streams();
 
-        let mpris_apps: HashSet<String> = mpris_streams
-            .iter()
-            .map(|s| s.app_name.to_lowercase())
-            .collect();
+        let mut pulse_by_app: HashMap<String, AudioStream> = HashMap::new();
+        for ps in pulse_streams {
+            pulse_by_app.entry(ps.app_name.to_lowercase()).or_insert(ps);
+        }
 
         let mut streams = mpris_streams;
-        for ps in pulse_streams {
-            if !mpris_apps.contains(&ps.app_name.to_lowercase()) {
-                streams.push(ps);
+        for stream in &mut streams {
+            if let Some(pulse_stream) = pulse_by_app.remove(&stream.app_name.to_lowercase()) {
+                if stream.volume_percent.is_none() {
+                    stream.volume_percent = pulse_stream.volume_percent;
+                }
+                if !stream.muted {
+                    stream.muted = pulse_stream.muted;
+                }
             }
         }
+        streams.extend(pulse_by_app.into_values());
 
         streams.truncate(MAX_STREAMS);
         Ok(AudioInfo { streams })
@@ -68,7 +74,9 @@ fn get_mpris_streams() -> Vec<AudioStream> {
         };
 
         let metadata = player.get_metadata().ok();
-        let title = metadata.as_ref().and_then(|m| m.title().map(|s| truncate(s)));
+        let title = metadata
+            .as_ref()
+            .and_then(|m| m.title().map(|s| truncate(s)));
         let artist = metadata
             .as_ref()
             .and_then(|m| m.artists().map(|a| truncate(&a.join(", "))));
@@ -94,14 +102,14 @@ fn get_pulse_streams() -> Vec<AudioStream> {
         }
     };
 
-    let apps: Vec<pulsectl::controllers::types::ApplicationInfo> =
-        match handler.list_applications() {
-            Ok(a) => a,
-            Err(e) => {
-                tracing::debug!("PulseAudio list_applications error: {e}");
-                return Vec::new();
-            }
-        };
+    let apps: Vec<pulsectl::controllers::types::ApplicationInfo> = match handler.list_applications()
+    {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::debug!("PulseAudio list_applications error: {e}");
+            return Vec::new();
+        }
+    };
 
     apps.into_iter()
         .filter(|app| !app.corked)
@@ -113,7 +121,11 @@ fn get_pulse_streams() -> Vec<AudioStream> {
 
             let volume_percent = if app.has_volume {
                 let avg = app.volume.avg().0;
-                Some(((avg as f64 / 0x10000_u32 as f64) * 100.0).round().min(255.0) as u8)
+                Some(
+                    ((avg as f64 / 0x10000_u32 as f64) * 100.0)
+                        .round()
+                        .min(255.0) as u8,
+                )
             } else {
                 None
             };
@@ -134,13 +146,18 @@ fn truncate(s: &str) -> String {
     if s.len() <= MAX_STRING_LEN {
         s.to_string()
     } else {
-        format!("{}...", &s[..MAX_STRING_LEN - 3])
+        let mut cutoff = MAX_STRING_LEN - 3;
+        while !s.is_char_boundary(cutoff) {
+            cutoff -= 1;
+        }
+        format!("{}...", &s[..cutoff])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_truncate_short() {
@@ -185,17 +202,27 @@ mod tests {
             },
         ];
 
-        let mpris_apps: HashSet<String> = mpris.iter().map(|s| s.app_name.to_lowercase()).collect();
-        let mut streams = mpris;
+        let mut pulse_by_app: HashMap<String, AudioStream> = HashMap::new();
         for ps in pulse {
-            if !mpris_apps.contains(&ps.app_name.to_lowercase()) {
-                streams.push(ps);
+            pulse_by_app.entry(ps.app_name.to_lowercase()).or_insert(ps);
+        }
+        let mut streams = mpris;
+        for stream in &mut streams {
+            if let Some(pulse_stream) = pulse_by_app.remove(&stream.app_name.to_lowercase()) {
+                if stream.volume_percent.is_none() {
+                    stream.volume_percent = pulse_stream.volume_percent;
+                }
+                if !stream.muted {
+                    stream.muted = pulse_stream.muted;
+                }
             }
         }
+        streams.extend(pulse_by_app.into_values());
 
         assert_eq!(streams.len(), 2);
         assert_eq!(streams[0].app_name, "Spotify");
         assert!(streams[0].title.is_some());
+        assert_eq!(streams[0].volume_percent, Some(80));
         assert_eq!(streams[1].app_name, "Firefox");
     }
 }
