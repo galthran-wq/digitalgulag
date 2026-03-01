@@ -70,7 +70,9 @@ export async function chatStream(
       } else if (line.startsWith('data: ')) {
         try {
           const parsed = JSON.parse(line.slice(6))
-          if (eventType === 'text') {
+          if (eventType === 'start') {
+            callbacks.onDone(parsed.chat_id)
+          } else if (eventType === 'text') {
             callbacks.onText(parsed.text)
           } else if (eventType === 'done') {
             callbacks.onDone(parsed.chat_id)

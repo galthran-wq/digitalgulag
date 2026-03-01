@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onMounted } from 'vue'
 import { NInput, NButton, NText, NScrollbar, NIcon, NSpin } from 'naive-ui'
 import { SendOutline, TimeOutline, AddOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
@@ -33,6 +33,10 @@ const inputValue = ref('')
 const scrollbarRef = ref<InstanceType<typeof NScrollbar> | null>(null)
 
 const isHistory = computed(() => chatStore.activeView === 'history')
+
+onMounted(() => {
+  chatStore.restoreChat()
+})
 
 function scrollToBottom(smooth = false) {
   scrollbarRef.value?.scrollTo({ top: 999999, behavior: smooth ? 'smooth' : 'auto' })

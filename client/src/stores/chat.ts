@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { chatStream, listChats, getChat } from '@/api/chat'
 import type { ChatMessage, ChatSummary } from '@/types/chat'
@@ -6,13 +6,21 @@ import type { ChatMessage, ChatSummary } from '@/types/chat'
 let msgSeq = 0
 const uid = () => `msg-${Date.now()}-${++msgSeq}`
 
+const ACTIVE_CHAT_KEY = 'activeChatId'
+
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const streaming = ref(false)
   const error = ref<string | null>(null)
 
   // Active chat session — tracks backend chat_id for conversation continuity
-  const activeChatId = ref<string | null>(null)
+  // Restored from localStorage so chats survive page reload
+  const activeChatId = ref<string | null>(localStorage.getItem(ACTIVE_CHAT_KEY))
+
+  watch(activeChatId, (id) => {
+    if (id) localStorage.setItem(ACTIVE_CHAT_KEY, id)
+    else localStorage.removeItem(ACTIVE_CHAT_KEY)
+  })
 
   // History
   const activeView = ref<'chat' | 'history'>('chat')
@@ -126,6 +134,18 @@ export const useChatStore = defineStore('chat', () => {
     fetchHistory()
   }
 
+  /** Restore last active chat from backend on page load. */
+  async function restoreChat() {
+    if (activeChatId.value && !messages.value.length) {
+      try {
+        await loadChat(activeChatId.value)
+      } catch {
+        // Chat no longer exists — clear stale reference
+        activeChatId.value = null
+      }
+    }
+  }
+
   return {
     messages,
     streaming,
@@ -142,5 +162,6 @@ export const useChatStore = defineStore('chat', () => {
     loadChat,
     newChat,
     showHistory,
+    restoreChat,
   }
 })

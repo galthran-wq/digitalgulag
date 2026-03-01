@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -28,7 +28,6 @@ def _sse_event(event_type: str, data: dict) -> str:
 
 
 def _parse_messages(raw_messages: list | None) -> list[ChatMessageItem]:
-    """Extract user/assistant messages from pydantic-ai JSONB format."""
     if not raw_messages:
         return []
     items = []
@@ -47,7 +46,6 @@ def _parse_messages(raw_messages: list | None) -> list[ChatMessageItem]:
 
 
 def _preview_from_messages(raw_messages: list | None) -> str:
-    """Get first user message as preview text."""
     if not raw_messages:
         return ""
     for msg in raw_messages:
@@ -142,7 +140,6 @@ async def chat_stream(
     user_cfg = current_user.session_config or {}
     effective_model = user_cfg.get("llm_model") or settings.chat_llm_model
 
-    # Resume existing chat or create a new one
     chat = None
     if body.chat_id:
         from uuid import UUID as PyUUID
@@ -160,7 +157,6 @@ async def chat_stream(
             llm_model=effective_model,
         )
 
-    # Load message history
     message_history = None
     if chat.messages:
         try:
@@ -174,6 +170,19 @@ async def chat_stream(
             logger.warning("Failed to parse chat history for chat %s, starting fresh", chat.id)
             message_history = None
 
+    user_msg = {
+        "kind": "request",
+        "parts": [{
+            "part_kind": "user-prompt",
+            "content": body.message,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }],
+    }
+    pre_save = (chat.messages or []) + [user_msg]
+    await chat_repo.update_messages(
+        chat.id, json.dumps(pre_save), input_tokens=0, output_tokens=0,
+    )
+
     event_queue: asyncio.Queue = asyncio.Queue()
 
     deps = _build_deps(
@@ -185,7 +194,6 @@ async def chat_stream(
     )
 
     async def run_agent():
-        """Run agent in background task, pushing events to the queue."""
         try:
             async with agent.run_stream(
                 body.message,
@@ -196,7 +204,6 @@ async def chat_stream(
                 async for text in result.stream_text(delta=True):
                     await event_queue.put(("text", {"text": text}))
 
-                # Save message history and tokens
                 try:
                     messages_json = result.all_messages_json().decode()
                 except Exception:
@@ -215,6 +222,7 @@ async def chat_stream(
             await event_queue.put(("error", {"error": str(e)}))
 
     async def event_generator():
+        yield _sse_event("start", {"chat_id": str(chat.id)})
         task = asyncio.create_task(run_agent())
         try:
             while True:
