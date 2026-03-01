@@ -29,10 +29,10 @@ export const useActivityStore = defineStore('activity', () => {
     }
   }
 
-  async function fetchSessions(date: string) {
+  async function fetchSessions(date: string, range: 'day' | 'week' = 'day') {
     sessionsLoading.value = true
     try {
-      const res = await listSessions({ date, range: 'day', limit: 500 })
+      const res = await listSessions({ date, range, limit: 500 })
       sessions.value = res.sessions
     } finally {
       sessionsLoading.value = false
