@@ -17,6 +17,7 @@ dependencies = [
     "bcrypt>=4.0.0,<4.1.0",
     "email-validator>=2.1.1",
     "prometheus-client==0.19.0",
+    "pydantic-ai>=0.0.36",
 ]
 
 [project.optional-dependencies]

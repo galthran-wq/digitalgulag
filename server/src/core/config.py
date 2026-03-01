@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-change-this-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 24 * 60
+
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    default_llm_model: str = "openai:gpt-4o-mini"
+    chat_llm_model: str = "openai:gpt-4o-mini"
+    enable_cron_generation: bool = False
     
     @property
     def postgres_url(self) -> str:
