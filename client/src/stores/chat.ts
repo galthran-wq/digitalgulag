@@ -105,7 +105,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function loadChat(chatId: string) {
+  async function loadChat(chatId: string): Promise<boolean> {
     loadingHistory.value = true
     try {
       const detail = await getChat(chatId)
@@ -117,8 +117,10 @@ export const useChatStore = defineStore('chat', () => {
       }))
       activeChatId.value = chatId
       activeView.value = 'chat'
+      return true
     } catch (e: any) {
       error.value = e.message ?? 'Failed to load chat'
+      return false
     } finally {
       loadingHistory.value = false
     }
@@ -137,12 +139,8 @@ export const useChatStore = defineStore('chat', () => {
   /** Restore last active chat from backend on page load. */
   async function restoreChat() {
     if (activeChatId.value && !messages.value.length) {
-      try {
-        await loadChat(activeChatId.value)
-      } catch {
-        // Chat no longer exists — clear stale reference
-        activeChatId.value = null
-      }
+      const restored = await loadChat(activeChatId.value)
+      if (!restored) activeChatId.value = null
     }
   }
 

@@ -3,6 +3,7 @@ import { ref, watch, nextTick, computed, onMounted } from 'vue'
 import { NInput, NButton, NText, NScrollbar, NIcon, NSpin } from 'naive-ui'
 import { SendOutline, TimeOutline, AddOutline } from '@vicons/ionicons5'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useChatStore } from '@/stores/chat'
 import { useTimelineStore } from '@/stores/timeline'
 
@@ -10,7 +11,8 @@ marked.setOptions({ breaks: true, gfm: true })
 
 function renderMarkdown(text: string): string {
   if (!text) return ''
-  return marked.parse(text, { async: false }) as string
+  const html = marked.parse(text, { async: false }) as string
+  return DOMPurify.sanitize(html)
 }
 
 function formatDate(iso: string): string {
@@ -42,10 +44,13 @@ function scrollToBottom(smooth = false) {
   scrollbarRef.value?.scrollTo({ top: 999999, behavior: smooth ? 'smooth' : 'auto' })
 }
 
-watch(() => chatStore.messages.length, async () => {
-  await nextTick()
-  scrollToBottom(true)
-})
+watch(
+  () => chatStore.messages.length,
+  async () => {
+    await nextTick()
+    scrollToBottom(true)
+  },
+)
 
 watch(
   () => chatStore.messages.at(-1)?.content,
@@ -122,7 +127,13 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
           <NText
             depth="2"
-            style="font-size: var(--to-text-base); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden"
+            style="
+              font-size: var(--to-text-base);
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+            "
           >
             {{ chat.preview || 'No messages' }}
           </NText>
@@ -139,12 +150,7 @@ function handleKeydown(e: KeyboardEvent) {
           </NText>
         </div>
 
-        <div
-          v-for="msg in chatStore.messages"
-          :key="msg.id"
-          class="chat-message"
-          :class="msg.role"
-        >
+        <div v-for="msg in chatStore.messages" :key="msg.id" class="chat-message" :class="msg.role">
           <div class="chat-bubble" :class="msg.role">
             <template v-if="msg.role === 'assistant'">
               <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
@@ -264,7 +270,9 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 @keyframes blink {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* History list */
