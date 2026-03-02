@@ -125,6 +125,8 @@ async def telegram_webhook(
     x_telegram_bot_api_secret_token: str = Header(None),
     session: AsyncSession = Depends(get_postgres_session),
 ):
+    if not settings.telegram_webhook_secret:
+        raise HTTPException(status_code=503, detail="Telegram webhook not configured")
     if x_telegram_bot_api_secret_token != settings.telegram_webhook_secret:
         raise HTTPException(status_code=403, detail="Invalid secret token")
 
@@ -180,7 +182,10 @@ async def telegram_webhook(
         )
         await repo.delete_connect_token(token_value)
 
-        await tg.send_message(chat_id, "Connected! Your digitalgulag account is now linked.")
+        try:
+            await tg.send_message(chat_id, "Connected! Your digitalgulag account is now linked.")
+        except Exception:
+            logger.exception("Failed to send Telegram connection confirmation")
         return {"ok": True}
 
     if text == "/start":
