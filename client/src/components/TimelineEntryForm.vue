@@ -9,10 +9,11 @@ import {
   NColorPicker,
   NText,
 } from 'naive-ui'
-import { set } from 'date-fns'
+import { set, addDays } from 'date-fns'
 import { formatISO } from 'date-fns'
 import type { TimelineEntry } from '@/types/timeline'
 import { DEFAULT_ENTRY_COLOR, CATEGORY_COLORS } from '@/constants/palette'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   show: boolean
@@ -122,7 +123,12 @@ onUnmounted(() => {
 function buildISOFromTimePicker(timeMs: number): string {
   const d = new Date(timeMs)
   const dateParts = props.date.split('-').map(Number)
-  const merged = set(d, { year: dateParts[0], month: dateParts[1] - 1, date: dateParts[2] })
+  let merged = set(d, { year: dateParts[0], month: dateParts[1] - 1, date: dateParts[2] })
+  const auth = useAuthStore()
+  const dayStartHour = auth.user?.session_config?.day_start_hour ?? 0
+  if (dayStartHour > 0 && d.getHours() < dayStartHour) {
+    merged = addDays(merged, 1)
+  }
   return formatISO(merged)
 }
 
