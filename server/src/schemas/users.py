@@ -16,6 +16,28 @@ def _validate_timezone(v: str) -> str:
     return v
 
 
+def _validate_categories(
+    v: Optional[dict[str, "CategoryConfig"]],
+) -> Optional[dict[str, "CategoryConfig"]]:
+    if v is not None:
+        if len(v) > 20:
+            raise ValueError("Maximum 20 categories allowed")
+        for name in v:
+            if len(name) > 50 or len(name) == 0:
+                raise ValueError(f"Category name must be 1-50 characters: {name!r}")
+    return v
+
+
+def _validate_classification_rules(v: Optional[list[str]]) -> Optional[list[str]]:
+    if v is not None:
+        if len(v) > 30:
+            raise ValueError("Maximum 30 classification rules allowed")
+        for rule in v:
+            if len(rule) > 500 or len(rule) == 0:
+                raise ValueError("Each rule must be 1-500 characters")
+    return v
+
+
 class CategoryConfig(BaseModel):
     color: str
     type: str = "neutral"
@@ -54,24 +76,12 @@ class SessionConfig(BaseModel):
     @field_validator("categories")
     @classmethod
     def validate_categories(cls, v: Optional[dict[str, CategoryConfig]]) -> Optional[dict[str, CategoryConfig]]:
-        if v is not None:
-            if len(v) > 20:
-                raise ValueError("Maximum 20 categories allowed")
-            for name in v:
-                if len(name) > 50 or len(name) == 0:
-                    raise ValueError(f"Category name must be 1-50 characters: {name!r}")
-        return v
+        return _validate_categories(v)
 
     @field_validator("classification_rules")
     @classmethod
     def validate_classification_rules(cls, v: Optional[list[str]]) -> Optional[list[str]]:
-        if v is not None:
-            if len(v) > 30:
-                raise ValueError("Maximum 30 classification rules allowed")
-            for rule in v:
-                if len(rule) > 500 or len(rule) == 0:
-                    raise ValueError("Each rule must be 1-500 characters")
-        return v
+        return _validate_classification_rules(v)
 
 
 class SessionConfigUpdate(BaseModel):
@@ -95,24 +105,12 @@ class SessionConfigUpdate(BaseModel):
     @field_validator("categories")
     @classmethod
     def validate_categories(cls, v: Optional[dict[str, CategoryConfig]]) -> Optional[dict[str, CategoryConfig]]:
-        if v is not None:
-            if len(v) > 20:
-                raise ValueError("Maximum 20 categories allowed")
-            for name in v:
-                if len(name) > 50 or len(name) == 0:
-                    raise ValueError(f"Category name must be 1-50 characters: {name!r}")
-        return v
+        return _validate_categories(v)
 
     @field_validator("classification_rules")
     @classmethod
     def validate_classification_rules(cls, v: Optional[list[str]]) -> Optional[list[str]]:
-        if v is not None:
-            if len(v) > 30:
-                raise ValueError("Maximum 30 classification rules allowed")
-            for rule in v:
-                if len(rule) > 500 or len(rule) == 0:
-                    raise ValueError("Each rule must be 1-500 characters")
-        return v
+        return _validate_classification_rules(v)
 
 
 class UserResponse(BaseModel):

@@ -30,10 +30,6 @@ class AgentMemoryRepositoryInterface(ABC):
         pass
 
     @abstractmethod
-    async def deactivate(self, memory_id: UUID, user_id: UUID) -> Optional[AgentMemoryModel]:
-        pass
-
-    @abstractmethod
     async def delete(self, memory_id: UUID, user_id: UUID) -> bool:
         pass
 
@@ -87,24 +83,6 @@ class AgentMemoryRepository(AgentMemoryRepositoryInterface):
         )
         result = await self.session.execute(query)
         return result.scalar() or 0
-
-    async def deactivate(self, memory_id: UUID, user_id: UUID) -> Optional[AgentMemoryModel]:
-        query = select(AgentMemoryModel).where(
-            AgentMemoryModel.id == memory_id,
-            AgentMemoryModel.user_id == user_id,
-        )
-        result = await self.session.execute(query)
-        memory = result.scalar_one_or_none()
-        if not memory:
-            return None
-        memory.is_active = False
-        try:
-            await self.session.commit()
-            await self.session.refresh(memory)
-        except Exception:
-            await self.session.rollback()
-            raise
-        return memory
 
     async def delete(self, memory_id: UUID, user_id: UUID) -> bool:
         query = select(AgentMemoryModel).where(
