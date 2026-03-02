@@ -53,7 +53,10 @@ async def list_sessions(
     )
 
     if events:
-        cap_time = min(datetime.now(timezone.utc), range_end_aware)
+        latest_day_end = datetime.combine(
+            events[-1].timestamp.date(), time.max, tzinfo=timezone.utc,
+        )
+        cap_time = min(datetime.now(timezone.utc), latest_day_end)
     else:
         cap_time = datetime.now(timezone.utc)
 

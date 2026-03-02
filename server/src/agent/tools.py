@@ -54,7 +54,10 @@ async def get_activity_sessions(ctx: RunContext[AgentDeps], target_date: str) ->
         await _emit(ctx, "tool_result", {"name": "get_activity_sessions", "summary": "No activity data found"})
         return []
 
-    cap_time = min(datetime.now(timezone.utc), range_end_aware)
+    latest_day_end = datetime.combine(
+        events[-1].timestamp.date(), time.max, tzinfo=timezone.utc,
+    )
+    cap_time = min(datetime.now(timezone.utc), latest_day_end)
     sessions = compute_sessions(
         events,
         cap_time,
