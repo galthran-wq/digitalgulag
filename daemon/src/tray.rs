@@ -129,6 +129,7 @@ fn spawn_background_runtime(
 ) {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
     let shutdown_tx = shutdown_tx.clone();
+    let server_connected = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     std::thread::spawn(move || {
         rt.block_on(async move {
@@ -138,8 +139,9 @@ fn spawn_background_runtime(
                 let config = config.clone();
                 let buffer = buffer.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
+                let server_connected = server_connected.clone();
                 tokio::spawn(async move {
-                    crate::engine::run(config, buffer, cmd_rx, status_tx, shutdown_rx).await
+                    crate::engine::run(config, buffer, cmd_rx, status_tx, shutdown_rx, server_connected).await
                 })
             };
 
@@ -147,8 +149,9 @@ fn spawn_background_runtime(
                 let config = config.clone();
                 let buffer = buffer.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
+                let server_connected = server_connected.clone();
                 tokio::spawn(async move {
-                    crate::sync::run(config, buffer, shutdown_rx).await
+                    crate::sync::run(config, buffer, shutdown_rx, server_connected).await
                 })
             };
 
