@@ -379,10 +379,12 @@ onMounted(loadConfig)
                 />
                 <NButton size="small" @click="addRule">Add</NButton>
               </div>
-
-              <NButton type="primary" :loading="saving" @click="saveCategories">Save</NButton>
             </NSpace>
           </NCard>
+
+          <NSpace :size="12" style="margin-top: 16px">
+            <NButton type="primary" :loading="saving" @click="saveCategories">Save</NButton>
+          </NSpace>
         </template>
         <template v-else-if="activeTab === 'integrations'">
           <TelegramCard />
