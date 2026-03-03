@@ -156,39 +156,44 @@ def _detect_overlaps(
     slots.sort(key=lambda s: s.start)
 
     errors: list[str] = []
-    for i in range(len(slots) - 1):
-        a, b = slots[i], slots[i + 1]
-        if a.end <= b.start:
-            continue
-        if not a.is_proposed and not b.is_proposed:
-            continue
+    active: list[_TimeSlot] = []
+    for slot in slots:
+        active = [s for s in active if s.end > slot.start]
+        for other in active:
+            if not other.is_proposed and not slot.is_proposed:
+                continue
 
-        overlap_seconds = (min(a.end, b.end) - b.start).total_seconds()
-        overlap_min = int(overlap_seconds // 60)
+            overlap_seconds = (min(other.end, slot.end) - max(other.start, slot.start)).total_seconds()
+            if overlap_seconds <= 0:
+                continue
+            overlap_min = int(overlap_seconds // 60)
 
-        a_start = a.start.strftime("%H:%M")
-        a_end = a.end.strftime("%H:%M")
-        b_start = b.start.strftime("%H:%M")
-        b_end = b.end.strftime("%H:%M")
+            a, b = other, slot
+            a_start = a.start.strftime("%H:%M")
+            a_end = a.end.strftime("%H:%M")
+            b_start = b.start.strftime("%H:%M")
+            b_end = b.end.strftime("%H:%M")
 
-        if b.is_user_edited:
-            errors.append(
-                f"OVERLAP: '{a.label}' ({a_start}-{a_end}) overlaps with "
-                f"'{b.label}' ({b_start}-{b_end}, USER-EDITED, cannot be modified) "
-                f"by {overlap_min}min. You must adjust '{a.label}'."
-            )
-        elif a.is_user_edited:
-            errors.append(
-                f"OVERLAP: '{a.label}' ({a_start}-{a_end}, USER-EDITED, cannot be modified) "
-                f"overlaps with '{b.label}' ({b_start}-{b_end}) "
-                f"by {overlap_min}min. You must adjust '{b.label}'."
-            )
-        else:
-            errors.append(
-                f"OVERLAP: '{a.label}' ({a_start}-{a_end}) overlaps with "
-                f"'{b.label}' ({b_start}-{b_end}) "
-                f"by {overlap_min}min. Adjust end_time of '{a.label}' or start_time of '{b.label}'."
-            )
+            if b.is_user_edited:
+                errors.append(
+                    f"OVERLAP: '{a.label}' ({a_start}-{a_end}) overlaps with "
+                    f"'{b.label}' ({b_start}-{b_end}, USER-EDITED, cannot be modified) "
+                    f"by {overlap_min}min. You must adjust '{a.label}'."
+                )
+            elif a.is_user_edited:
+                errors.append(
+                    f"OVERLAP: '{a.label}' ({a_start}-{a_end}, USER-EDITED, cannot be modified) "
+                    f"overlaps with '{b.label}' ({b_start}-{b_end}) "
+                    f"by {overlap_min}min. You must adjust '{b.label}'."
+                )
+            else:
+                errors.append(
+                    f"OVERLAP: '{a.label}' ({a_start}-{a_end}) overlaps with "
+                    f"'{b.label}' ({b_start}-{b_end}) "
+                    f"by {overlap_min}min. Adjust end_time of '{a.label}' or start_time of '{b.label}'."
+                )
+
+        active.append(slot)
 
     return errors
 
@@ -237,7 +242,12 @@ async def save_timeline_entries(ctx: RunContext[AgentDeps], entries: list[Timeli
     range_end = max(all_ends)
 
     existing_entries = await ctx.deps.timeline_repo.get_by_time_range(
-        ctx.deps.user_id, range_start, range_end, limit=500, offset=0,
+        ctx.deps.user_id,
+        range_start,
+        range_end,
+        limit=500,
+        offset=0,
+        include_overlap=True,
     )
 
     proposed_ids = {item.id for item in bulk_items if item.id is not None}
