@@ -93,11 +93,9 @@ const editingCategories = ref<Record<string, CategoryConfig>>({})
 const editingRules = ref<string[]>([])
 
 function initCategoryEditor() {
-  categoryInitializing = true
   const cats = config.value.categories ?? defaultCategories.value
   editingCategories.value = JSON.parse(JSON.stringify(cats))
   editingRules.value = [...(config.value.classification_rules ?? [])]
-  nextTick(() => { categoryInitializing = false })
 }
 
 function addCategory() {
@@ -135,30 +133,34 @@ function deleteRule(index: number) {
   editingRules.value.splice(index, 1)
 }
 
-let categoryInitializing = false
+let initializing = false
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
-async function autoSaveCategories() {
+async function autoSave() {
   saving.value = true
   try {
-    config.value = await updateSessionConfig({
+    const updated = await updateSessionConfig({
       ...config.value,
       categories: editingCategories.value,
       classification_rules: editingRules.value,
     })
+    initializing = true
+    config.value = updated
+    nextTick(() => { initializing = false })
   } catch {
-    message.error('Failed to save categories')
+    message.error('Failed to save settings')
   } finally {
     saving.value = false
   }
 }
 
 function scheduleAutoSave() {
-  if (categoryInitializing) return
+  if (initializing) return
   if (autoSaveTimer) clearTimeout(autoSaveTimer)
-  autoSaveTimer = setTimeout(autoSaveCategories, 600)
+  autoSaveTimer = setTimeout(autoSave, 600)
 }
 
+watch(config, scheduleAutoSave, { deep: true })
 watch(editingCategories, scheduleAutoSave, { deep: true })
 watch(editingRules, scheduleAutoSave, { deep: true })
 
@@ -168,6 +170,7 @@ onUnmounted(() => {
 
 async function loadConfig() {
   loading.value = true
+  initializing = true
   try {
     const [loaded, defaults] = await Promise.all([getSessionConfig(), getDefaultCategories()])
     if (!loaded.timezone) {
@@ -180,18 +183,7 @@ async function loadConfig() {
     message.error('Failed to load session config')
   } finally {
     loading.value = false
-  }
-}
-
-async function saveConfig() {
-  saving.value = true
-  try {
-    config.value = await updateSessionConfig(config.value)
-    message.success('Settings saved')
-  } catch {
-    message.error('Failed to save settings')
-  } finally {
-    saving.value = false
+    nextTick(() => { initializing = false })
   }
 }
 
@@ -274,10 +266,7 @@ onMounted(loadConfig)
                 />
               </div>
 
-              <NSpace :size="12">
-                <NButton type="primary" :loading="saving" @click="saveConfig">Save</NButton>
-                <NButton @click="resetDefaults">Reset to defaults</NButton>
-              </NSpace>
+              <NButton text size="small" @click="resetDefaults">Reset to defaults</NButton>
             </NSpace>
           </NCard>
         </template>
@@ -323,9 +312,6 @@ onMounted(loadConfig)
                 />
               </div>
 
-              <NSpace :size="12">
-                <NButton type="primary" :loading="saving" @click="saveConfig">Save</NButton>
-              </NSpace>
             </NSpace>
           </NCard>
         </template>
