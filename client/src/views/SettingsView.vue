@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import {
   NCard,
   NSpace,
@@ -93,9 +93,11 @@ const editingCategories = ref<Record<string, CategoryConfig>>({})
 const editingRules = ref<string[]>([])
 
 function initCategoryEditor() {
+  categoryInitializing = true
   const cats = config.value.categories ?? defaultCategories.value
   editingCategories.value = JSON.parse(JSON.stringify(cats))
   editingRules.value = [...(config.value.classification_rules ?? [])]
+  nextTick(() => { categoryInitializing = false })
 }
 
 function addCategory() {
@@ -133,7 +135,10 @@ function deleteRule(index: number) {
   editingRules.value.splice(index, 1)
 }
 
-async function saveCategories() {
+let categoryInitializing = false
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+async function autoSaveCategories() {
   saving.value = true
   try {
     config.value = await updateSessionConfig({
@@ -141,14 +146,25 @@ async function saveCategories() {
       categories: editingCategories.value,
       classification_rules: editingRules.value,
     })
-    initCategoryEditor()
-    message.success('Categories saved')
   } catch {
     message.error('Failed to save categories')
   } finally {
     saving.value = false
   }
 }
+
+function scheduleAutoSave() {
+  if (categoryInitializing) return
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(autoSaveCategories, 600)
+}
+
+watch(editingCategories, scheduleAutoSave, { deep: true })
+watch(editingRules, scheduleAutoSave, { deep: true })
+
+onUnmounted(() => {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+})
 
 async function loadConfig() {
   loading.value = true
@@ -396,9 +412,6 @@ onMounted(loadConfig)
             </NSpace>
           </NCard>
 
-          <NSpace :size="12" style="margin-top: 16px">
-            <NButton type="primary" :loading="saving" @click="saveCategories">Save</NButton>
-          </NSpace>
         </template>
         <template v-else-if="activeTab === 'integrations'">
           <TelegramCard />
