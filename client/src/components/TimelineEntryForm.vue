@@ -6,13 +6,16 @@ import {
   NButton,
   NSpace,
   NPopconfirm,
-  NColorPicker,
+  NSelect,
   NText,
+  NTooltip,
 } from 'naive-ui'
 import { set, addDays } from 'date-fns'
 import { formatISO } from 'date-fns'
 import type { TimelineEntry } from '@/types/timeline'
-import { DEFAULT_ENTRY_COLOR, CATEGORY_COLORS } from '@/constants/palette'
+import { DEFAULT_ENTRY_COLOR } from '@/constants/palette'
+import type { CategoryConfig } from '@/constants/categories'
+import { getDefaultCategories } from '@/api/settings'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
@@ -39,7 +42,21 @@ const category = ref('')
 const color = ref(DEFAULT_ENTRY_COLOR)
 const description = ref('')
 
-const presetColors = CATEGORY_COLORS.slice(0, 6)
+const auth = useAuthStore()
+const defaultCategories = ref<Record<string, CategoryConfig>>({})
+const categories = computed(() => auth.user?.session_config?.categories ?? defaultCategories.value)
+const categoryOptions = computed(() =>
+  Object.keys(categories.value).map((name) => ({ label: name, value: name })),
+)
+
+getDefaultCategories().then((d) => { defaultCategories.value = d }).catch(() => {})
+
+function onCategoryChange(value: string | null) {
+  category.value = value ?? ''
+  if (value && categories.value[value]) {
+    color.value = categories.value[value].color
+  }
+}
 
 const panelRef = ref<HTMLElement | null>(null)
 const panelStyle = ref<Record<string, string>>({})
@@ -132,7 +149,6 @@ function buildISOFromTimePicker(timeMs: number): string {
   const d = new Date(timeMs)
   const dateParts = props.date.split('-').map(Number)
   let merged = set(d, { year: dateParts[0], month: dateParts[1] - 1, date: dateParts[2] })
-  const auth = useAuthStore()
   const dayStartHour = auth.user?.session_config?.day_start_hour ?? 0
   const timezone = auth.user?.session_config?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   const hour = hourInTimezone(merged, timezone)
@@ -185,40 +201,24 @@ function close() {
               </NSpace>
             </NSpace>
 
-            <NSpace :size="6" align="center" style="margin-bottom: 16px">
-              <button
-                v-for="c in presetColors"
-                :key="c"
-                type="button"
-                class="color-swatch"
-                :class="{ selected: c === color }"
-                :style="{
-                  width: '22px',
-                  height: '22px',
-                  borderRadius: '50%',
-                  backgroundColor: c,
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: c,
-                  outline: 'none',
-                }"
-                @click="color = c"
-              />
-              <NColorPicker
-                v-model:value="color"
-                :modes="['hex']"
-                size="small"
-                style="width: 70px"
-              />
-            </NSpace>
+            <div style="margin-bottom: 12px">
+              <NTooltip>
+                <template #trigger>
+                  <NSelect
+                    :value="category || null"
+                    :options="categoryOptions"
+                    placeholder="Category"
+                    size="small"
+                    filterable
+                    clearable
+                    @update:value="onCategoryChange"
+                  />
+                </template>
+                Manage categories in Settings
+              </NTooltip>
+            </div>
 
             <template v-if="expanded || isEdit">
-              <NInput
-                v-model:value="category"
-                placeholder="Category (e.g. coding, meetings)"
-                size="small"
-                style="margin-bottom: 8px"
-              />
               <NInput
                 v-model:value="description"
                 type="textarea"
