@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Optional, Union
 
 
-CATEGORY_TYPES = {"productive", "neutral", "distraction"}
 HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
@@ -40,21 +39,14 @@ def _validate_classification_rules(v: Optional[list[str]]) -> Optional[list[str]
 
 class CategoryConfig(BaseModel):
     color: str
-    type: str = "neutral"
     deprecated: bool = False
+    work: bool = True
 
     @field_validator("color")
     @classmethod
     def validate_color(cls, v: str) -> str:
         if not HEX_COLOR_RE.match(v):
             raise ValueError(f"Invalid hex color: {v}")
-        return v
-
-    @field_validator("type")
-    @classmethod
-    def validate_type(cls, v: str) -> str:
-        if v not in CATEGORY_TYPES:
-            raise ValueError(f"type must be one of {CATEGORY_TYPES}")
         return v
 
 

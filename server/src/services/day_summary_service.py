@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.postgres.day_summaries import DaySummaryModel
 from src.repositories.activity_events import ActivityEventRepository
 from src.repositories.day_summaries import DaySummaryRepository
+from src.repositories.productivity_points import ProductivityPointRepository
 from src.repositories.timeline_entries import TimelineEntryRepository
 from src.services.activity_session_generator import compute_sessions
 from src.services.day_boundary import day_range_utc
@@ -67,8 +68,10 @@ async def generate_day_summary(
         day_timezone=day_tz,
     )
 
-    user_categories = cfg.get("categories")
-    metrics = compute_day_summary(entries, sessions, user_categories)
+    pp_repo = ProductivityPointRepository(session)
+    productivity_points = await pp_repo.get_by_date(user_id, target_date)
+
+    metrics = compute_day_summary(entries, sessions, productivity_points)
 
     narrative = None
     if not is_partial:

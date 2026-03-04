@@ -20,13 +20,16 @@ import { useAuthStore } from '@/stores/auth'
 import { listEntries } from '@/api/timeline'
 import { listSessions } from '@/api/activity'
 import { getDaySummary, getDaySummaryTrends } from '@/api/daySummary'
+import { getProductivityCurve } from '@/api/productivityCurve'
 import { useDayAnalytics } from '@/composables/useDayAnalytics'
 import { usePolling } from '@/composables/usePolling'
 import { SESSION_PALETTE, CATEGORY_COLORS, SEMANTIC_COLORS } from '@/constants/palette'
 import { getLogicalToday } from '@/utils/dayBoundary'
+import ProductivityCurve from '@/components/ProductivityCurve.vue'
 import type { TimelineEntry } from '@/types/timeline'
 import type { ActivitySession } from '@/types/activity'
 import type { DaySummary } from '@/types/daySummary'
+import type { ProductivityCurveResponse } from '@/types/productivityCurve'
 
 const router = useRouter()
 const activityStore = useActivityStore()
@@ -38,6 +41,7 @@ const showAllSessions = ref(false)
 const todaySummary = ref<DaySummary | null>(null)
 const yesterdaySummary = ref<DaySummary | null>(null)
 const trendSummaries = ref<DaySummary[]>([])
+const todayCurve = ref<ProductivityCurveResponse | null>(null)
 
 const {
   totalActiveMinutes,
@@ -121,6 +125,7 @@ async function refreshAll() {
     getDaySummary(today).then((s) => { todaySummary.value = s }).catch(() => {}),
     getDaySummary(yesterdayDate).then((s) => { yesterdaySummary.value = s }).catch(() => {}),
     getDaySummaryTrends(weekAgo, today).then((r) => { trendSummaries.value = r.summaries }).catch(() => {}),
+    getProductivityCurve(today).then((c) => { todayCurve.value = c }).catch(() => {}),
   ])
 }
 
@@ -142,10 +147,27 @@ usePolling(refreshAll, 60_000)
         <NText depth="3" style="font-size: 13px">{{ activityStore.status?.events_today ?? 0 }} events today</NText>
       </div>
 
+      <NCard v-if="todayCurve && todayCurve.points.length" size="small">
+        <template #header>
+          <div style="display: flex; align-items: baseline; gap: 12px">
+            <span style="font-weight: 600">Productivity</span>
+            <span
+              v-if="todayCurve.day_score !== null"
+              style="font-size: 28px; font-weight: 700; color: var(--to-brand)"
+            >{{ Math.round(todayCurve.day_score) }}</span>
+            <span v-if="todayCurve.day_score !== null" style="font-size: 13px; opacity: 0.5">/ 100</span>
+            <span v-if="todayCurve.work_minutes > 0" style="font-size: 13px; opacity: 0.5; margin-left: auto">
+              {{ formatMinutes(todayCurve.work_minutes) }} work
+            </span>
+          </div>
+        </template>
+        <ProductivityCurve :points="todayCurve.points" />
+      </NCard>
+
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px">
         <div class="stat-card" style="border-left-color: var(--to-brand)">
           <div class="stat-label">Active Time</div>
-          <div class="stat-value">{{ formatMinutes(totalActiveMinutes) }}</div>
+          <div class="stat-value">{{ formatMinutes(todaySummary?.total_active_minutes ?? totalActiveMinutes) }}</div>
         </div>
         <div class="stat-card" style="border-left-color: #0d7377">
           <div class="stat-label">Sessions</div>
@@ -158,15 +180,17 @@ usePolling(refreshAll, 60_000)
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px">
-        <div class="stat-card" :style="{ borderLeftColor: focusScoreColor(todaySummary?.focus_score ?? null) }">
-          <div class="stat-label">Focus Score</div>
-          <div class="stat-value" :style="{ color: focusScoreColor(todaySummary?.focus_score ?? null) }">
-            {{ formatScore(todaySummary?.focus_score ?? null) }}
+        <div class="stat-card" :style="{ borderLeftColor: focusScoreColor(todaySummary?.avg_focus_score ?? null) }">
+          <div class="stat-label">Avg Focus</div>
+          <div class="stat-value" :style="{ color: focusScoreColor(todaySummary?.avg_focus_score ?? null) }">
+            {{ formatScore(todaySummary?.avg_focus_score ?? null) }}
           </div>
         </div>
-        <div class="stat-card" style="border-left-color: #b83230">
-          <div class="stat-label">Distraction</div>
-          <div class="stat-value">{{ formatScore(todaySummary?.distraction_score ?? null) }}</div>
+        <div class="stat-card" :style="{ borderLeftColor: SEMANTIC_COLORS.deep }">
+          <div class="stat-label">Deep Work</div>
+          <div class="stat-value" style="font-size: 20px">
+            {{ todaySummary ? formatMinutes(todaySummary.deep_work_minutes) : '—' }}
+          </div>
         </div>
         <div class="stat-card" style="border-left-color: #7c3aed">
           <div class="stat-label">Longest Focus</div>
@@ -192,22 +216,22 @@ usePolling(refreshAll, 60_000)
               <NText class="trend-label">{{ trendDayLabel(s.date) }}</NText>
               <div class="stacked-track">
                 <div
-                  v-if="s.productive_minutes > 0"
+                  v-if="s.deep_work_minutes > 0"
                   class="stacked-seg"
-                  :style="{ width: (s.productive_minutes / maxTrendMinutes * 100) + '%', background: SEMANTIC_COLORS.productive }"
+                  :style="{ width: (s.deep_work_minutes / maxTrendMinutes * 100) + '%', background: SEMANTIC_COLORS.deep }"
                 />
                 <div
-                  v-if="s.neutral_minutes > 0"
+                  v-if="s.shallow_work_minutes > 0"
                   class="stacked-seg"
-                  :style="{ width: (s.neutral_minutes / maxTrendMinutes * 100) + '%', background: SEMANTIC_COLORS.neutral }"
+                  :style="{ width: (s.shallow_work_minutes / maxTrendMinutes * 100) + '%', background: SEMANTIC_COLORS.shallow }"
                 />
                 <div
-                  v-if="s.distraction_minutes > 0"
+                  v-if="s.reactive_minutes > 0"
                   class="stacked-seg"
-                  :style="{ width: (s.distraction_minutes / maxTrendMinutes * 100) + '%', background: SEMANTIC_COLORS.distraction }"
+                  :style="{ width: (s.reactive_minutes / maxTrendMinutes * 100) + '%', background: SEMANTIC_COLORS.reactive }"
                 />
               </div>
-              <NText depth="3" class="bar-value">{{ formatScore(s.focus_score) }}</NText>
+              <NText depth="3" class="bar-value">{{ formatScore(s.avg_focus_score) }}</NText>
             </div>
           </NCard>
         </NGridItem>
