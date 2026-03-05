@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -240,360 +240,58 @@ watch(activePage, () => {
       >{{ p.title }}</a>
     </nav>
 
+    <div class="docs-mobile-nav">
+      <select :value="activePage" @change="selectPage(($event.target as HTMLSelectElement).value)">
+        <option v-for="p in pages" :key="p.key" :value="p.key">{{ p.title }}</option>
+      </select>
+    </div>
+
     <div ref="contentRef" class="docs-content" @scroll="onContentScroll" @click="onContentClick">
 
       <template v-if="activePage === 'idea'">
-        <div class="hero">
-          <h1>{{ t('guide.idea.heroTitle') }}</h1>
-          <p class="tagline">{{ t('guide.idea.tagline') }}</p>
-        </div>
-
-        <h2 id="idea-problem" class="idea-section">{{ t('guide.idea.problemTitle') }}</h2>
-        <div class="question-cascade">
-          <p>{{ t('guide.idea.problemQ1') }}</p>
-          <p v-html="t('guide.idea.problemQ2')"></p>
-          <p v-html="t('guide.idea.problemQ3')"></p>
-          <p class="question-standalone" v-html="t('guide.idea.problemQ4')"></p>
-          <p>{{ t('guide.idea.problemQ5') }}</p>
-          <p v-html="t('guide.idea.problemQ6')"></p>
-        </div>
-        <p class="accent-line">{{ t('guide.idea.accentSolve') }}</p>
-
-        <h2 id="idea-solution" class="idea-section">{{ t('guide.idea.solutionTitle') }}</h2>
-        <p>{{ t('guide.idea.solutionP1') }}</p>
-        <p v-html="t('guide.idea.solutionP2')"></p>
-        <p v-html="t('guide.idea.solutionP3')"></p>
-
-        <h2 id="idea-philosophy" class="idea-section">{{ t('guide.idea.philosophyTitle') }}</h2>
-        <p class="manifesto-line">{{ t('guide.idea.philosophyManifesto') }}</p>
-        <p v-html="t('guide.idea.philosophyP1')"></p>
-        <p>{{ t('guide.idea.philosophyP2') }}</p>
-        <div class="score-hero">
-          <span class="score-number">{{ t('guide.idea.scoreNumber') }}</span>
-          <span class="score-caption">{{ t('guide.idea.scoreCaption') }}</span>
-        </div>
-        <p>{{ t('guide.idea.philosophyP3') }}</p>
-        <p class="accent-line">{{ t('guide.idea.accentImpossible') }}</p>
-        <p>{{ t('guide.idea.philosophyP4') }}</p>
-        <p class="manifesto-line closing">{{ t('guide.idea.philosophyClosing') }}</p>
+        <div v-html="t('guide.idea.content')"></div>
       </template>
 
       <template v-if="activePage === 'curve'">
-        <h1>{{ t('guide.curve.title') }}</h1>
-        <h2 id="curve-overview">{{ t('guide.curve.overviewTitle') }}</h2>
-        <p>{{ t('guide.curve.overviewP1') }}</p>
-        <p v-html="t('guide.curve.overviewP2')"></p>
-        <p>{{ t('guide.curve.overviewP3') }}</p>
-        <p v-html="t('guide.curve.overviewP4')"></p>
-
-        <h2 id="curve-demo">{{ t('guide.curve.seeItTitle') }}</h2>
-        <p>{{ t('guide.curve.seeItP1') }}</p>
+        <div v-html="t('guide.curve.content')"></div>
         <div class="demo-chart">
           <ProductivityCurve key="demo-curve" :points="demoPoints" :entries="demoEntries" />
         </div>
       </template>
 
       <template v-if="activePage === 'scoring'">
-        <h1>{{ t('guide.scoring.title') }}</h1>
-        <h2 id="scoring-focus">{{ t('guide.scoring.focusTitle') }}</h2>
-        <p v-html="t('guide.scoring.focusP1')"></p>
-        <p>{{ t('guide.scoring.focusP2') }}</p>
-        <p>{{ t('guide.scoring.focusP3') }}</p>
-        <table class="info-table">
-          <thead><tr><th v-for="h in (t('guide.scoring.focusTableHeader') as unknown as string[])" :key="h">{{ h }}</th></tr></thead>
-          <tbody>
-            <tr v-for="(row, i) in (t('guide.scoring.focusTableRows') as unknown as string[][])" :key="i">
-              <td :class="{ 'score-high': i < 2, 'score-mid': i === 2, 'score-low': i > 2 }" v-if="row.length > 0">{{ row[0] }}</td>
-              <td v-for="(cell, j) in row.slice(1)" :key="j">{{ cell }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="note">{{ t('guide.scoring.focusNote') }}</p>
-
-        <h2 id="scoring-depth">{{ t('guide.scoring.depthTitle') }}</h2>
-        <p v-html="t('guide.scoring.depthP1')"></p>
-        <p>{{ t('guide.scoring.depthP2') }}</p>
-        <div class="depth-cards">
-          <div class="depth-card deep">
-            <div class="depth-label">{{ t('guide.scoring.depthDeepLabel') }}</div>
-            <div class="depth-weight">{{ t('guide.scoring.depthDeepWeight') }}</div>
-            <p>{{ t('guide.scoring.depthDeepDesc') }}</p>
-          </div>
-          <div class="depth-card shallow">
-            <div class="depth-label">{{ t('guide.scoring.depthShallowLabel') }}</div>
-            <div class="depth-weight">{{ t('guide.scoring.depthShallowWeight') }}</div>
-            <p>{{ t('guide.scoring.depthShallowDesc') }}</p>
-          </div>
-          <div class="depth-card reactive">
-            <div class="depth-label">{{ t('guide.scoring.depthReactiveLabel') }}</div>
-            <div class="depth-weight">{{ t('guide.scoring.depthReactiveWeight') }}</div>
-            <p>{{ t('guide.scoring.depthReactiveDesc') }}</p>
-          </div>
-        </div>
-
-        <h2 id="scoring-formula">{{ t('guide.scoring.formulaTitle') }}</h2>
-        <p class="formula">{{ t('guide.scoring.formula') }}</p>
-        <p>{{ t('guide.scoring.formulaP1') }}</p>
-        <p>{{ t('guide.scoring.formulaP2') }}</p>
-        <table class="info-table">
-          <thead><tr><th v-for="h in (t('guide.scoring.formulaTableHeader') as unknown as string[])" :key="h">{{ h }}</th></tr></thead>
-          <tbody>
-            <tr v-for="(row, i) in (t('guide.scoring.formulaTableRows') as unknown as string[][])" :key="i">
-              <td v-for="(cell, j) in row" :key="j" :class="{ 'score-high': j === row.length - 1 && Number(cell) >= 70, 'score-mid': j === row.length - 1 && Number(cell) >= 50 && Number(cell) < 70, 'score-low': j === row.length - 1 && Number(cell) < 50 }">{{ cell }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p>{{ t('guide.scoring.formulaP3') }}</p>
+        <div v-html="t('guide.scoring.content')"></div>
       </template>
 
       <template v-if="activePage === 'categories'">
-        <h1>{{ t('guide.categories.title') }}</h1>
-        <h2 id="cat-question">{{ t('guide.categories.questionTitle') }}</h2>
-        <p v-html="t('guide.categories.questionP1')"></p>
-        <p>{{ t('guide.categories.questionP2') }}</p>
-        <p class="accent-line">{{ t('guide.categories.questionAccent') }}</p>
-
-        <h2 id="cat-distinction">{{ t('guide.categories.distinctionTitle') }}</h2>
-        <p v-html="t('guide.categories.distinctionP1')"></p>
-        <p v-html="t('guide.categories.distinctionP2')"></p>
-        <p>{{ t('guide.categories.distinctionP3') }}</p>
-        <p v-html="t('guide.categories.distinctionP4')"></p>
-        <p>{{ t('guide.categories.distinctionP5') }}</p>
-
-        <h2 id="cat-yours">{{ t('guide.categories.yoursTitle') }}</h2>
-        <p v-html="t('guide.categories.yoursP1')"></p>
-        <div class="example-categories">
-          <div v-for="cat in (t('guide.categories.defaultCategories') as unknown as any[])" :key="cat.name" class="example-cat">
-            <span class="cat-dot" :style="{ background: cat.color }"></span>
-            <span class="cat-name">{{ cat.name }}</span>
-            <span class="cat-flag" :class="cat.flag === 'work' ? 'work' : 'not-work'">{{ cat.flag }}</span>
-          </div>
-        </div>
-        <p>{{ t('guide.categories.yoursP2') }}</p>
-        <div class="example-categories custom">
-          <div v-for="cat in (t('guide.categories.customCategories') as unknown as any[])" :key="cat.name" class="example-cat">
-            <span class="cat-dot" :style="{ background: cat.color }"></span>
-            <span class="cat-name">{{ cat.name }}</span>
-            <span class="cat-flag" :class="cat.flag === 'work' ? 'work' : 'not-work'">{{ cat.flag }}</span>
-          </div>
-        </div>
-
-        <h2 id="cat-rules">{{ t('guide.categories.rulesTitle') }}</h2>
-        <p v-html="t('guide.categories.rulesP1')"></p>
-        <div class="example-rules">
-          <div v-for="(rule, i) in (t('guide.categories.exampleRules') as unknown as string[])" :key="i" class="example-rule">{{ rule }}</div>
-        </div>
-        <p v-html="t('guide.categories.rulesP2')"></p>
-
-        <h2 id="cat-flag">{{ t('guide.categories.flagTitle') }}</h2>
-        <p>{{ t('guide.categories.flagP1') }}</p>
-        <ul>
-          <li v-html="t('guide.categories.flagProductivity')"></li>
-          <li v-html="t('guide.categories.flagPerformance')"></li>
-        </ul>
-        <p>{{ t('guide.categories.flagP2') }}</p>
-
-        <h2 id="cat-chart">{{ t('guide.categories.chartTitle') }}</h2>
-        <p>{{ t('guide.categories.chartP1') }}</p>
+        <div v-html="t('guide.categories.content')"></div>
         <div class="demo-categories">
           <CategoryBreakdownChart :items="demoCategories" />
         </div>
       </template>
 
       <template v-if="activePage === 'dashboard'">
-        <h1>{{ t('guide.dashboard.title') }}</h1>
-        <h2 id="dash-numbers">{{ t('guide.dashboard.numbersTitle') }}</h2>
-        <p>{{ t('guide.dashboard.numbersP1') }}</p>
-        <div class="metrics-explainer">
-          <div class="metric-explain">
-            <div class="metric-ex-value">{{ (t('guide.dashboard.metricActive') as unknown as any).value }}</div>
-            <div class="metric-ex-label">{{ (t('guide.dashboard.metricActive') as unknown as any).label }}</div>
-            <div class="metric-ex-desc">{{ (t('guide.dashboard.metricActive') as unknown as any).desc }}</div>
-          </div>
-          <div class="metric-explain">
-            <div class="metric-ex-value">{{ (t('guide.dashboard.metricWorkTime') as unknown as any).value }}</div>
-            <div class="metric-ex-label">{{ (t('guide.dashboard.metricWorkTime') as unknown as any).label }}</div>
-            <div class="metric-ex-desc" v-html="(t('guide.dashboard.metricWorkTime') as unknown as any).desc"></div>
-          </div>
-          <div class="metric-explain">
-            <div class="metric-ex-value">{{ (t('guide.dashboard.metricDeepWork') as unknown as any).value }}</div>
-            <div class="metric-ex-label">{{ (t('guide.dashboard.metricDeepWork') as unknown as any).label }}</div>
-            <div class="metric-ex-desc" v-html="(t('guide.dashboard.metricDeepWork') as unknown as any).desc"></div>
-          </div>
-          <div class="metric-explain">
-            <div class="metric-ex-value">{{ (t('guide.dashboard.metricFocus') as unknown as any).value }}</div>
-            <div class="metric-ex-label">{{ (t('guide.dashboard.metricFocus') as unknown as any).label }}</div>
-            <div class="metric-ex-desc">{{ (t('guide.dashboard.metricFocus') as unknown as any).desc }}</div>
-          </div>
-          <div class="metric-explain">
-            <div class="metric-ex-value">{{ (t('guide.dashboard.metricBestStreak') as unknown as any).value }}</div>
-            <div class="metric-ex-label">{{ (t('guide.dashboard.metricBestStreak') as unknown as any).label }}</div>
-            <div class="metric-ex-desc">{{ (t('guide.dashboard.metricBestStreak') as unknown as any).desc }}</div>
-          </div>
-          <div class="metric-explain">
-            <div class="metric-ex-value">{{ (t('guide.dashboard.metricSwitches') as unknown as any).value }}</div>
-            <div class="metric-ex-label">{{ (t('guide.dashboard.metricSwitches') as unknown as any).label }}</div>
-            <div class="metric-ex-desc">{{ (t('guide.dashboard.metricSwitches') as unknown as any).desc }}</div>
-          </div>
-        </div>
-        <p v-html="t('guide.dashboard.numbersP2')"></p>
-
-        <h2 id="dash-time">{{ t('guide.dashboard.timeTitle') }}</h2>
-        <p>{{ t('guide.dashboard.timeP1') }}</p>
-        <p v-html="t('guide.dashboard.timeP2')"></p>
-        <p>{{ t('guide.dashboard.timeP3') }}</p>
-
-        <h2 id="dash-aggregation">{{ t('guide.dashboard.aggregationTitle') }}</h2>
-        <p>{{ t('guide.dashboard.aggregationP1') }}</p>
-        <table class="info-table">
-          <thead><tr><th v-for="h in (t('guide.dashboard.aggregationTableHeader') as unknown as string[])" :key="h">{{ h }}</th></tr></thead>
-          <tbody>
-            <tr v-for="(row, i) in (t('guide.dashboard.aggregationTableRows') as unknown as string[][])" :key="i">
-              <td v-for="(cell, j) in row" :key="j" v-html="cell"></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h2 id="dash-heatmap">{{ t('guide.dashboard.heatmapTitle') }}</h2>
-        <p v-html="t('guide.dashboard.heatmapP1')"></p>
-        <p>{{ t('guide.dashboard.heatmapP2') }}</p>
-
-        <h2 id="dash-narrative">{{ t('guide.dashboard.narrativeTitle') }}</h2>
-        <p v-html="t('guide.dashboard.narrativeP1')"></p>
-        <p>{{ t('guide.dashboard.narrativeP2') }}</p>
+        <div v-html="t('guide.dashboard.content')"></div>
       </template>
 
       <template v-if="activePage === 'timeline'">
-        <h1>{{ t('guide.timeline.title') }}</h1>
-        <h2 id="tl-raw">{{ t('guide.timeline.rawTitle') }}</h2>
-        <p>{{ t('guide.timeline.rawP1') }}</p>
-        <p>{{ t('guide.timeline.rawP2') }}</p>
-        <div class="event-log">
-          <div v-for="(ev, i) in (t('guide.timeline.eventLog') as unknown as any[])" :key="i" class="event-line" :class="{ dim: ev.dim }">
-            <span class="ev-time">{{ ev.time }}</span><span class="ev-app">{{ ev.app }}</span><span class="ev-detail">{{ ev.detail }}</span>
-          </div>
-          <div class="event-line dim"><span class="ev-time">…</span><span class="ev-app"></span><span class="ev-detail"></span></div>
-        </div>
-        <p v-html="t('guide.timeline.rawP3')"></p>
-
-        <h2 id="tl-ai">{{ t('guide.timeline.aiTitle') }}</h2>
-        <p>{{ t('guide.timeline.aiP1') }}</p>
-        <div class="timeline-demo">
-          <div v-for="(entry, i) in (t('guide.timeline.timelineEntries') as unknown as any[])" :key="i" class="tl-entry" :style="{ borderLeftColor: entry.color }">
-            <span class="tl-time">{{ entry.time }}</span>
-            <span class="tl-label">{{ entry.label }}</span>
-          </div>
-        </div>
-        <p>{{ t('guide.timeline.aiP2') }}</p>
-        <p v-html="t('guide.timeline.aiP3')"></p>
-        <p v-html="t('guide.timeline.aiP4')"></p>
-
-        <h2 id="tl-loop">{{ t('guide.timeline.loopTitle') }}</h2>
-        <p>{{ t('guide.timeline.loopP1') }}</p>
-        <p>{{ t('guide.timeline.loopP2') }}</p>
-        <p v-html="t('guide.timeline.loopP3')"></p>
+        <div v-html="t('guide.timeline.content')"></div>
       </template>
 
       <template v-if="activePage === 'agent'">
-        <h1>{{ t('guide.agent.title') }}</h1>
-        <h2 id="agent-what">{{ t('guide.agent.whatTitle') }}</h2>
-        <p v-html="t('guide.agent.whatP1')"></p>
-        <p>{{ t('guide.agent.whatP2') }}</p>
-        <p class="accent-line">{{ t('guide.agent.whatAccent') }}</p>
-
-        <h2 id="agent-talk">{{ t('guide.agent.talkTitle') }}</h2>
-        <p v-html="t('guide.agent.talkP1')"></p>
-        <div class="chat-examples">
-          <div v-for="(msg, i) in (t('guide.agent.chatExamples') as unknown as any[])" :key="i" class="chat-bubble" :class="msg.role">{{ msg.text }}</div>
-        </div>
-        <p>{{ t('guide.agent.talkP2') }}</p>
-
-        <h2 id="agent-memory">{{ t('guide.agent.memoryTitle') }}</h2>
-        <p>{{ t('guide.agent.memoryP1') }}</p>
-        <div class="chat-examples">
-          <div v-for="(msg, i) in (t('guide.agent.memoryExamples') as unknown as any[])" :key="i" class="chat-bubble" :class="msg.role">{{ msg.text }}</div>
-        </div>
-        <p>{{ t('guide.agent.memoryP2') }}</p>
+        <div v-html="t('guide.agent.content')"></div>
       </template>
 
       <template v-if="activePage === 'integrations'">
-        <h1>{{ t('guide.integrations.title') }}</h1>
-        <h2 id="int-why">{{ t('guide.integrations.whyTitle') }}</h2>
-        <p>{{ t('guide.integrations.whyP1') }}</p>
-        <p>{{ t('guide.integrations.whyP2') }}</p>
-        <p v-html="t('guide.integrations.whyP3')"></p>
-
-        <h2 id="int-current">{{ t('guide.integrations.currentTitle') }}</h2>
-        <div class="integration-list">
-          <div class="integration-card">
-            <div class="int-header">
-              <span class="int-name">{{ (t('guide.integrations.telegram') as unknown as any).name }}</span>
-              <span class="int-badge live">{{ (t('guide.integrations.telegram') as unknown as any).badge }}</span>
-            </div>
-            <p>{{ (t('guide.integrations.telegram') as unknown as any).desc }}</p>
-          </div>
-        </div>
-
-        <h2 id="int-planned">{{ t('guide.integrations.plannedTitle') }}</h2>
-        <p>{{ t('guide.integrations.plannedP1') }}</p>
-        <div class="integration-list">
-          <div v-for="int in (t('guide.integrations.plannedIntegrations') as unknown as any[])" :key="int.name" class="integration-card planned">
-            <div class="int-header">
-              <span class="int-name">{{ int.name }}</span>
-              <span class="int-badge planned">{{ t('guide.integrations.plannedTitle').toLowerCase() }}</span>
-            </div>
-            <p>{{ int.desc }}</p>
-          </div>
-        </div>
+        <div v-html="t('guide.integrations.content')"></div>
       </template>
 
       <template v-if="activePage === 'security'">
-        <h1>{{ t('guide.security.title') }}</h1>
-        <h2 id="sec-concern">{{ t('guide.security.concernTitle') }}</h2>
-        <p>{{ t('guide.security.concernP1') }}</p>
-        <p>{{ t('guide.security.concernP2') }}</p>
-
-        <h2 id="sec-collect">{{ t('guide.security.collectTitle') }}</h2>
-        <p>{{ t('guide.security.collectP1') }}</p>
-        <ul>
-          <li v-for="(item, i) in (t('guide.security.collectItems') as unknown as string[])" :key="i" v-html="item"></li>
-        </ul>
-        <p>{{ t('guide.security.collectP2') }}</p>
-
-        <h2 id="sec-llm">{{ t('guide.security.llmTitle') }}</h2>
-        <p v-html="t('guide.security.llmP1')"></p>
-        <p>{{ t('guide.security.llmP2') }}</p>
-        <p>{{ t('guide.security.llmP3') }}</p>
-
-        <h2 id="sec-open">{{ t('guide.security.openTitle') }}</h2>
-        <p>{{ t('guide.security.openP1') }}</p>
-        <p class="github-cta">
-          <a :href="t('guide.security.githubUrl') as unknown as string" target="_blank" rel="noopener" class="github-link">
-            <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            {{ t('guide.security.githubRepo') }}
-          </a>
-        </p>
-        <p>{{ t('guide.security.openP2') }}</p>
-        <p>{{ t('guide.security.openP3') }}</p>
-        <p>{{ t('guide.security.openP4') }}</p>
+        <div v-html="t('guide.security.content')"></div>
       </template>
 
       <template v-if="activePage === 'conclusion'">
-        <h1>{{ t('guide.conclusion.title') }}</h1>
-        <h2 id="end-summary">{{ t('guide.conclusion.summaryTitle') }}</h2>
-        <p>{{ t('guide.conclusion.summaryP1') }}</p>
-        <p v-html="t('guide.conclusion.summaryP2')"></p>
-        <p v-html="t('guide.conclusion.summaryP3')"></p>
-        <p>{{ t('guide.conclusion.summaryP4') }}</p>
-        <p class="manifesto-line closing" style="margin-top: 32px">{{ t('guide.conclusion.summaryClosing') }}</p>
-
-        <h2 id="end-references">{{ t('guide.conclusion.referencesTitle') }}</h2>
-        <p>{{ t('guide.conclusion.referencesIntro') }}</p>
-        <div class="references">
-          <p v-for="(ref, i) in (t('guide.conclusion.references') as unknown as any[])" :key="i">
-            {{ ref.authors }} <em>{{ ref.title }}</em> {{ ref.detail }}
-          </p>
-        </div>
+        <div v-html="t('guide.conclusion.content')"></div>
       </template>
 
     </div>
@@ -611,7 +309,7 @@ watch(activePage, () => {
   </div>
 </template>
 
-<style scoped>
+<style>
 .docs-layout {
   display: flex;
   gap: 0;
@@ -1195,13 +893,84 @@ watch(activePage, () => {
   margin-bottom: 6px;
 }
 
+.docs-mobile-nav {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .docs-toc { display: none; }
 }
 
 @media (max-width: 640px) {
+  .docs-layout {
+    flex-direction: column;
+    height: auto;
+  }
+
   .docs-pages { display: none; }
+
+  .docs-mobile-nav {
+    display: block;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(150, 150, 150, 0.1);
+    flex-shrink: 0;
+  }
+
+  .docs-mobile-nav select {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    background: rgba(150, 150, 150, 0.08);
+    border: 1px solid rgba(150, 150, 150, 0.15);
+    border-radius: 6px;
+    color: inherit;
+    appearance: auto;
+  }
+
+  .docs-content {
+    padding: 0 16px 24px;
+    overflow-y: visible;
+  }
+
+  .docs-content h1 { font-size: 20px; }
+  .docs-content h2 { font-size: 16px; }
+
+  .hero h1 {
+    font-size: 26px;
+    letter-spacing: 4px;
+  }
+
+  .hero .tagline { font-size: 12px; }
+
+  .accent-line { font-size: 16px; padding: 20px 0; }
+
+  .score-hero .score-number { font-size: 40px; }
+
   .depth-cards { grid-template-columns: 1fr; }
-  .metrics-explainer { grid-template-columns: repeat(2, 1fr); }
+  .metrics-explainer { grid-template-columns: 1fr 1fr; }
+
+  .formula { font-size: 13px; padding: 10px 12px; }
+
+  .info-table { font-size: 12px; }
+  .info-table th, .info-table td { padding: 5px 6px; }
+
+  .event-log { font-size: 11px; padding: 10px 12px; }
+  .ev-time { width: 50px; }
+  .ev-app { width: 56px; }
+
+  .example-categories { gap: 6px; }
+  .example-cat { padding: 5px 8px; font-size: 12px; }
+
+  .chat-bubble { max-width: 95%; }
+
+  .integration-card { padding: 10px 12px; }
+
+  .github-link { font-size: 13px; padding: 8px 14px; }
+}
+
+@media (max-width: 400px) {
+  .metrics-explainer { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 22px; letter-spacing: 2px; }
 }
 </style>
