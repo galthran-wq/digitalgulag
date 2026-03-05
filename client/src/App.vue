@@ -3,11 +3,9 @@ import { computed } from 'vue'
 import { NConfigProvider, NMessageProvider } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
 import { useThemeStore } from '@/stores/theme'
-import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/AppLayout.vue'
 
 const themeStore = useThemeStore()
-const authStore = useAuthStore()
 
 const fontFamily = "'Inter Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
 
@@ -51,12 +49,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
 <template>
   <NConfigProvider :theme="themeStore.theme" :theme-overrides="themeOverrides">
     <NMessageProvider>
-      <AppLayout v-if="authStore.isAuthenticated" />
-      <router-view v-else v-slot="{ Component }">
-        <Transition name="page" mode="out-in">
-          <component :is="Component" />
-        </Transition>
-      </router-view>
+      <AppLayout />
     </NMessageProvider>
   </NConfigProvider>
 </template>
