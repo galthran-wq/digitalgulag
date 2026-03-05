@@ -1,6 +1,8 @@
 import { createI18n } from 'vue-i18n'
 import en from './en'
 import ru from './ru'
+import guideEn from './guide-en'
+import guideRu from './guide-ru'
 
 export type SupportedLocale = 'en' | 'ru'
 
@@ -21,7 +23,10 @@ const i18n = createI18n({
   legacy: false,
   locale: detectLocale(),
   fallbackLocale: 'en',
-  messages: { en, ru },
+  messages: {
+    en: { ...en, guide: guideEn },
+    ru: { ...ru, guide: guideRu },
+  },
 })
 
 export default i18n
